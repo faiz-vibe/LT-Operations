@@ -8,7 +8,8 @@ import 'trash_screen.dart';
 import 'manage_suggestions_screen.dart';
 import '../services/backup_service.dart';
 
-// hi mother fucker
+// hi mother fucker i am your dad
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
