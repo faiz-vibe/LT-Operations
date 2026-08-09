@@ -8,7 +8,7 @@ import 'trash_screen.dart';
 import 'manage_suggestions_screen.dart';
 import '../services/backup_service.dart';
 
-//i am your dad
+// i am your dad
 
 
 class HomeScreen extends StatefulWidget {
