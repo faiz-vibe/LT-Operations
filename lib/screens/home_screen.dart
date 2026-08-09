@@ -30,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _navigateToEntry({VehicleEntry? existingEntry}) async {
+    FocusScope.of(context).unfocus(); // Keyboard/Focus hatane ke liye
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -42,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _navigateToConsignment(VehicleEntry entry) async {
+    FocusScope.of(context).unfocus(); // Keyboard/Focus hatane ke liye
     await Navigator.push(
       context,
       MaterialPageRoute(

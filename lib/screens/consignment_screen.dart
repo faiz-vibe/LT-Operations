@@ -32,7 +32,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
   String _boxSearchQuery = '';
 
   bool _isDamaged = false;
-  String _selectedMode = 'Surface'; // Default mode
+  String _selectedMode = 'Surface';
 
   BoxItem? _editingBox;
   bool _isNewDraft = false;
@@ -51,7 +51,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     super.dispose();
   }
 
-  // Yeh function data ko turant disk par save (flush) karega
   void _forceSave() {
     if (_editingBox == null) return;
 
@@ -79,7 +78,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
   void _saveAndClosePopup(BuildContext sheetContext) {
     if (_consignmentController.text.isEmpty || _receivedController.text.isEmpty) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
-        const SnackBar(content: Text('Consignment No aur Received Box zaroori hai!')),
+        const SnackBar(content: Text('Consignment No aur Received Box zaruri hai!')), // Typo fixed
       );
       return;
     }
@@ -308,8 +307,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         },
                       ),
                     ],
-
-                    // Transport Mode Dropdown
                     const SizedBox(height: 15),
                     DropdownButtonFormField<String>(
                       value: _selectedMode,
@@ -331,7 +328,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         _forceSave();
                       },
                     ),
-
                     const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
@@ -367,9 +363,16 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
   }
 
   void _showExportMenu() {
+    final entry = widget.vehicleEntry;
+    final activeBoxes = entry.boxes.where((b) => !b.isDeleted && b.consignmentNo.isNotEmpty).toList();
+
+    // Context ko pehle save kar lein taaki async gap ke baad crash na ho
+    final parentContext = context;
+    final messenger = ScaffoldMessenger.of(parentContext);
+
     showModalBottomSheet(
-      context: context,
-      builder: (context) {
+      context: parentContext,
+      builder: (sheetContext) {
         return Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
@@ -382,20 +385,32 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                   leading: const Icon(Icons.chat, color: Colors.green),
                   title: const Text('Export to WhatsApp'),
                   onTap: () async {
-                    Navigator.pop(context);
-                    await ExportService.exportToWhatsApp(widget.vehicleEntry);
+                    Navigator.pop(sheetContext);
+                    await ExportService.exportToWhatsApp(entry);
                   }
               ),
               ListTile(
                   leading: const Icon(Icons.photo, color: Colors.blue),
                   title: const Text('Export as Image (PNG)'),
                   onTap: () async {
-                    Navigator.pop(context);
-                    final image = await _screenshotController.capture();
-                    if (image != null) {
+                    Navigator.pop(sheetContext);
+                    try {
+                      final slipWidget = _buildDigitalSlip(entry, activeBoxes);
+
+                      // captureFromWidget null return nahi karta, isliye direct use karenge
+                      final imageBytes = await _screenshotController.captureFromWidget(
+                        slipWidget,
+                        pixelRatio: 2.0,
+                        context: parentContext, // Yahan parent context use karenge
+                      );
+
                       final directory = await getTemporaryDirectory();
-                      final file = await File('${directory.path}/transport_slip.png').writeAsBytes(image);
-                      await ExportService.shareImage(file, widget.vehicleEntry.vehicleNumber);
+                      final file = await File('${directory.path}/LT_Operations_Slip.png').writeAsBytes(imageBytes);
+                      await ExportService.shareImage(file, entry.vehicleNumber);
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Image export failed: $e')),
+                      );
                     }
                   }
               ),
@@ -403,8 +418,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                   leading: const Icon(Icons.table_view, color: Colors.orange),
                   title: const Text('Export to Excel'),
                   onTap: () async {
-                    Navigator.pop(context);
-                    await ExportService.exportToExcel(widget.vehicleEntry);
+                    Navigator.pop(sheetContext);
+                    await ExportService.exportToExcel(entry);
                   }
               ),
             ],
@@ -414,12 +429,200 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     );
   }
 
+  // Modern Digital Slip (Infographic Report) Widget
+  Widget _buildDigitalSlip(VehicleEntry entry, List<BoxItem> activeBoxes) {
+    return Material(
+      color: Colors.white,
+      child: Container(
+        width: 600,
+        padding: const EdgeInsets.all(0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Header Section
+            Container(
+              width: double.infinity,
+              color: Colors.blue[800],
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('LT Operations', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                      const Icon(Icons.local_shipping, color: Colors.white, size: 30),
+                    ],
+                  ),
+                  const Text('Transport Supervisor Report', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Generated: ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}  ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+
+            // 2. Body Content
+            Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Vehicle Info Block
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(entry.vehicleNumber, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            Text('Driver: ${entry.driverName}', style: const TextStyle(fontSize: 14, color: Colors.black87)),
+                            Text('Mobile: ${entry.driverMobile}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: entry.vehicleStatus == 'Loading' ? Colors.blue[100] : Colors.orange[100],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '${entry.vehicleStatus} | ${entry.gateNumber}',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: entry.vehicleStatus == 'Loading' ? Colors.blue[800] : Colors.orange[800]
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Summary Metrics
+                  Row(
+                    children: [
+                      _buildMetricBox('Total Boxes', entry.totalReceivedBoxes.toString(), Colors.blue),
+                      const SizedBox(width: 10),
+                      _buildMetricBox('Shortage', entry.totalShortage.toString(), entry.totalShortage > 0 ? Colors.red : Colors.green),
+                      const SizedBox(width: 10),
+                      _buildMetricBox('Damaged', activeBoxes.fold(0, (sum, b) => sum + b.damagedCount).toString(), activeBoxes.any((b) => b.isDamaged) ? Colors.orange : Colors.green),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Table Header
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    decoration: BoxDecoration(color: Colors.grey[200], borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
+                    child: Row(
+                      children: const [
+                        Expanded(flex: 3, child: Text('Consignment', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        Expanded(flex: 2, child: Text('Company', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        Expanded(flex: 1, child: Text('Exp', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12), textAlign: TextAlign.center)),
+                        Expanded(flex: 1, child: Text('Recv', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12), textAlign: TextAlign.center)),
+                        Expanded(flex: 1, child: Text('Short', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12), textAlign: TextAlign.center)),
+                        Expanded(flex: 1, child: Text('Mode', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12), textAlign: TextAlign.center)),
+                      ],
+                    ),
+                  ),
+
+                  // Table Rows
+                  ...activeBoxes.map((box) {
+                    final shortage = box.shortage;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: box.isDamaged ? Colors.red[50] : Colors.transparent,
+                        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(flex: 3, child: Text(box.consignmentNo, style: const TextStyle(fontSize: 12))),
+                          Expanded(flex: 2, child: Text(box.companyName, style: const TextStyle(fontSize: 12))),
+                          Expanded(flex: 1, child: Text(box.expectedBoxes.toString(), style: const TextStyle(fontSize: 12), textAlign: TextAlign.center)),
+                          Expanded(flex: 1, child: Text(box.receivedBoxes.toString(), style: const TextStyle(fontSize: 12), textAlign: TextAlign.center)),
+                          Expanded(
+                              flex: 1,
+                              child: Text(
+                                  shortage == 0 ? '0' : (shortage > 0 ? 'S:$shortage' : 'E:${-shortage}'),
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: shortage > 0 ? Colors.red : (shortage < 0 ? Colors.blue : Colors.black),
+                                      fontWeight: FontWeight.bold
+                                  ),
+                                  textAlign: TextAlign.center
+                              )
+                          ),
+                          Expanded(flex: 1, child: Text(box.transportMode, style: const TextStyle(fontSize: 10), textAlign: TextAlign.center)),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+
+                  const SizedBox(height: 30),
+
+                  // Footer Section
+                  Row(
+                    children: List.generate(
+                        50,
+                            (index) => Expanded(child: Container(height: 1, color: Colors.grey[400], margin: const EdgeInsets.symmetric(horizontal: 2)))
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Center(
+                    child: Text(
+                      'This is a computer-generated report from LT Operations App.',
+                      style: TextStyle(fontSize: 10, color: Colors.grey, fontStyle: FontStyle.italic),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helper widget for Metric Boxes
+  Widget _buildMetricBox(String title, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withOpacity(0.5))
+        ),
+        child: Column(
+          children: [
+            Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[700], fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final entry = widget.vehicleEntry;
     final allActiveBoxes = entry.boxes.where((b) => !b.isDeleted && b.consignmentNo.isNotEmpty).toList();
 
-    // Search Filter Logic (Consignment No, Company Name, Expected, Received, Transport Mode)
     final activeBoxes = _boxSearchQuery.isEmpty
         ? allActiveBoxes
         : allActiveBoxes.where((b) {
@@ -427,7 +630,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       final matchesCompany = b.companyName.toLowerCase().contains(_boxSearchQuery);
       final matchesExpected = b.expectedBoxes.toString().contains(_boxSearchQuery);
       final matchesReceived = b.receivedBoxes.toString().contains(_boxSearchQuery);
-      final matchesMode = b.transportMode.toLowerCase().contains(_boxSearchQuery); // Naya: Mode search
+      final matchesMode = b.transportMode.toLowerCase().contains(_boxSearchQuery);
       return matchesConsignment || matchesCompany || matchesExpected || matchesReceived || matchesMode;
     }).toList();
 
@@ -440,6 +643,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
           IconButton(
             icon: const Icon(Icons.edit_document),
             onPressed: () async {
+              FocusScope.of(context).unfocus(); // Keyboard/Focus hatane ke liye
               await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -454,220 +658,215 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
           IconButton(icon: const Icon(Icons.ios_share), onPressed: _showExportMenu),
         ],
       ),
-      body: Screenshot(
-        controller: _screenshotController,
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              color: Colors.grey[200],
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(entry.vehicleNumber, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                      Text(entry.driverName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(entry.driverMobile, style: const TextStyle(fontSize: 14, color: Colors.grey)),
-                  const Divider(thickness: 1, height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Total Boxes: ${entry.totalReceivedBoxes}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      if (entry.totalShortage > 0)
-                        Text('Shortage: ${entry.totalShortage}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red))
-                      else if (entry.totalShortage < 0)
-                        Text('Extra: ${-entry.totalShortage}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue))
-                      else
-                        const Text('All Perfect', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green)),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Total Consignment Entries: ${allActiveBoxes.length}',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black54),
-                  ),
-                ],
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            color: Colors.grey[200],
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(entry.vehicleNumber, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text(entry.driverName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(entry.driverMobile, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+                const Divider(thickness: 1, height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Total Boxes: ${entry.totalReceivedBoxes}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    if (entry.totalShortage > 0)
+                      Text('Shortage: ${entry.totalShortage}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red))
+                    else if (entry.totalShortage < 0)
+                      Text('Extra: ${-entry.totalShortage}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue))
+                    else
+                      const Text('All Perfect', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Total Consignment Entries: ${allActiveBoxes.length}',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+            child: TextField(
+              controller: _boxSearchController,
+              onChanged: (val) {
+                setState(() {
+                  _boxSearchQuery = val.toLowerCase();
+                });
+              },
+              decoration: InputDecoration(
+                labelText: 'Search Consignment, Company, Mode...',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _boxSearchQuery.isNotEmpty
+                    ? IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _boxSearchController.clear();
+                    setState(() {
+                      _boxSearchQuery = '';
+                    });
+                  },
+                )
+                    : null,
               ),
             ),
+          ),
 
-            // Box Search Bar
+          if (_boxSearchQuery.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-              child: TextField(
-                controller: _boxSearchController,
-                onChanged: (val) {
-                  setState(() {
-                    _boxSearchQuery = val.toLowerCase();
-                  });
-                },
-                decoration: InputDecoration(
-                  labelText: 'Search Consignment, Company, Mode...',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _boxSearchQuery.isNotEmpty
-                      ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      _boxSearchController.clear();
-                      setState(() {
-                        _boxSearchQuery = '';
-                      });
-                    },
-                  )
-                      : null,
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${activeBoxes.length} consignments found',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
                 ),
               ),
             ),
 
-            // Search Result Count
-            if (_boxSearchQuery.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '${activeBoxes.length} consignments found',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
-                  ),
-                ),
+          Expanded(
+            child: activeBoxes.isEmpty
+                ? Center(
+              child: Text(
+                _boxSearchQuery.isEmpty
+                    ? 'Koi box add nahi hua. \n+ dabakar box add karein.'
+                    : 'Koi box is search se match nahi hua.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
+            )
+                : ListView.builder(
+              controller: _listScrollController,
+              padding: const EdgeInsets.all(12),
+              itemCount: activeBoxes.length,
+              itemBuilder: (context, index) {
+                final box = activeBoxes[index];
+                final shortage = box.shortage;
+                final originalIndex = entry.boxes.indexOf(box);
 
-            Expanded(
-              child: activeBoxes.isEmpty
-                  ? Center(
-                child: Text(
-                  _boxSearchQuery.isEmpty
-                      ? 'Koi box add nahi hua. \n+ dabakar box add karein.'
-                      : 'Koi box is search se match nahi hua.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 16, color: Colors.grey),
-                ),
-              )
-                  : ListView.builder(
-                controller: _listScrollController,
-                padding: const EdgeInsets.all(12),
-                itemCount: activeBoxes.length,
-                itemBuilder: (context, index) {
-                  final box = activeBoxes[index];
-                  final shortage = box.shortage;
-                  final originalIndex = entry.boxes.indexOf(box);
-
-                  return Card(
-                    color: box.isDamaged ? Colors.red[50] : Colors.white,
-                    shape: RoundedRectangleBorder(
-                      side: BorderSide(
-                        color: box.isDamaged
-                            ? Colors.red
-                            : (shortage > 0 ? Colors.orange : (shortage < 0 ? Colors.blue : Colors.transparent)),
-                        width: 1.5,
-                      ),
-                      borderRadius: BorderRadius.circular(8),
+                return Card(
+                  color: box.isDamaged ? Colors.red[50] : Colors.white,
+                  shape: RoundedRectangleBorder(
+                    side: BorderSide(
+                      color: box.isDamaged
+                          ? Colors.red
+                          : (shortage > 0 ? Colors.orange : (shortage < 0 ? Colors.blue : Colors.transparent)),
+                      width: 1.5,
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(box.consignmentNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                const SizedBox(height: 2),
-                                Text(box.companyName, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Text(
-                                      'Exp: ${box.expectedBoxes} | Recv: ${box.receivedBoxes} ',
-                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                                    ),
-                                    if (shortage == 0)
-                                      const Icon(Icons.check_circle, color: Colors.green, size: 16)
-                                    else if (shortage > 0)
-                                      Text(' (Short: $shortage)', style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.bold))
-                                    else if (shortage < 0)
-                                        Text(' (Extra: ${-shortage})', style: const TextStyle(color: Colors.blue, fontSize: 13, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                                Text(
-                                  'Mode: ${box.transportMode}',
-                                  style: TextStyle(fontSize: 13, color: Colors.purple[700], fontWeight: FontWeight.w500),
-                                ),
-                                if (box.isDamaged)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 2.0),
-                                    child: Text(
-                                      'Damaged: ${box.damagedCount}',
-                                      style: TextStyle(fontSize: 13, color: Colors.red[700], fontWeight: FontWeight.w500),
-                                    ),
-                                  ),
-                                if (box.createdAt != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4.0),
-                                    child: Text(
-                                      'Added at ${box.createdAt!.hour.toString().padLeft(2, '0')}:${box.createdAt!.minute.toString().padLeft(2, '0')} Date: ${box.createdAt!.day}/${box.createdAt!.month}/${box.createdAt!.year}',
-                                      style: const TextStyle(fontSize: 10, color: Colors.grey, fontStyle: FontStyle.italic),
-                                    ),
-                                  ),
-                                if (box.lastEditedAt != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 2.0),
-                                    child: Text(
-                                      'Edited at ${box.lastEditedAt!.hour.toString().padLeft(2, '0')}:${box.lastEditedAt!.minute.toString().padLeft(2, '0')} Date: ${box.lastEditedAt!.day}/${box.lastEditedAt!.month}/${box.lastEditedAt!.year}',
-                                      style: const TextStyle(fontSize: 10, color: Colors.blueGrey, fontStyle: FontStyle.italic),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          Column(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              IconButton(
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-                                onPressed: () => _showBoxPopup(boxToEdit: box, index: originalIndex),
+                              Text(box.consignmentNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              const SizedBox(height: 2),
+                              Text(box.companyName, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Exp: ${box.expectedBoxes} | Recv: ${box.receivedBoxes} ',
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                                  ),
+                                  if (shortage == 0)
+                                    const Icon(Icons.check_circle, color: Colors.green, size: 16)
+                                  else if (shortage > 0)
+                                    Text(' (Short: $shortage)', style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.bold))
+                                  else if (shortage < 0)
+                                      Text(' (Extra: ${-shortage})', style: const TextStyle(color: Colors.blue, fontSize: 13, fontWeight: FontWeight.bold)),
+                                ],
                               ),
-                              const SizedBox(height: 16),
-                              IconButton(
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                                onPressed: () {
-                                  setState(() {
-                                    box.isDeleted = true;
-                                    final idx = widget.vehicleEntry.boxes.indexOf(box);
-                                    if (idx != -1) {
-                                      widget.vehicleEntry.boxes[idx] = box;
-                                    }
-                                    widget.vehicleEntry.lastEditedAt = DateTime.now();
-                                    widget.vehicleEntry.save();
-                                    final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
-                                    hiveBox.flush();
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('${box.consignmentNo} Trash me bhej diya gaya!')),
-                                  );
-                                },
+                              Text(
+                                'Mode: ${box.transportMode}',
+                                style: TextStyle(fontSize: 13, color: Colors.purple[700], fontWeight: FontWeight.w500),
                               ),
+                              if (box.isDamaged)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2.0),
+                                  child: Text(
+                                    'Damaged: ${box.damagedCount}',
+                                    style: TextStyle(fontSize: 13, color: Colors.red[700], fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                              if (box.createdAt != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4.0),
+                                  child: Text(
+                                    'Added at ${box.createdAt!.hour.toString().padLeft(2, '0')}:${box.createdAt!.minute.toString().padLeft(2, '0')} Date: ${box.createdAt!.day}/${box.createdAt!.month}/${box.createdAt!.year}',
+                                    style: const TextStyle(fontSize: 10, color: Colors.grey, fontStyle: FontStyle.italic),
+                                  ),
+                                ),
+                              if (box.lastEditedAt != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2.0),
+                                  child: Text(
+                                    'Edited at ${box.lastEditedAt!.hour.toString().padLeft(2, '0')}:${box.lastEditedAt!.minute.toString().padLeft(2, '0')} Date: ${box.lastEditedAt!.day}/${box.lastEditedAt!.month}/${box.lastEditedAt!.year}',
+                                    style: const TextStyle(fontSize: 10, color: Colors.blueGrey, fontStyle: FontStyle.italic),
+                                  ),
+                                ),
                             ],
                           ),
-                        ],
-                      ),
+                        ),
+                        Column(
+                          children: [
+                            IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                              onPressed: () => _showBoxPopup(boxToEdit: box, index: originalIndex),
+                            ),
+                            const SizedBox(height: 16),
+                            IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                              onPressed: () {
+                                setState(() {
+                                  box.isDeleted = true;
+                                  final idx = widget.vehicleEntry.boxes.indexOf(box);
+                                  if (idx != -1) {
+                                    widget.vehicleEntry.boxes[idx] = box;
+                                  }
+                                  widget.vehicleEntry.lastEditedAt = DateTime.now();
+                                  widget.vehicleEntry.save();
+                                  final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
+                                  hiveBox.flush();
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('${box.consignmentNo} Trash me bhej diya gaya!')),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showBoxPopup(),
