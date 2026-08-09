@@ -8,6 +8,8 @@ import 'trash_screen.dart';
 import 'manage_suggestions_screen.dart';
 import '../services/backup_service.dart';
 
+// hi mother fucker
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -164,6 +166,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           body: GestureDetector(
             behavior: HitTestBehavior.translucent,
+            // Naya: Bahar click karne par keyboard band kare
+            onTap: () {
+              FocusScope.of(context).unfocus();
+            },
             onHorizontalDragEnd: (details) {
               if (details.primaryVelocity != null && details.primaryVelocity! > 100) {
                 _scaffoldKey.currentState?.openDrawer();
