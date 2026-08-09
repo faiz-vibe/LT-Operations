@@ -398,5 +398,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
-// hi how are u
