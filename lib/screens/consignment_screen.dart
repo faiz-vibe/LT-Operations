@@ -3,6 +3,7 @@ import 'package:hive/hive.dart';
 import 'dart:io';
 import 'package:screenshot/screenshot.dart';
 import 'package:path_provider/path_provider.dart';
+
 import '../models/vehicle_entry.dart';
 import '../models/box_item.dart';
 import '../services/export_service.dart';
@@ -30,6 +31,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
   final _boxSearchController = TextEditingController();
   String _boxSearchQuery = '';
 
+  final FocusNode _boxSearchFocusNode = FocusNode();
+
   bool _isDamaged = false;
   String _selectedMode = 'Surface';
 
@@ -47,6 +50,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     _damageDetailsController.dispose();
     _boxSearchController.dispose();
     _listScrollController.dispose();
+    _boxSearchFocusNode.dispose();
     super.dispose();
   }
 
@@ -77,7 +81,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
   void _saveAndClosePopup(BuildContext sheetContext) {
     if (_consignmentController.text.isEmpty || _receivedController.text.isEmpty) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
-        const SnackBar(content: Text('Consignment No aur Received Box zaruri hai!')), // Typo fixed
+        const SnackBar(content: Text('Consignment No aur Received Box zaruri hai!')),
       );
       return;
     }
@@ -97,6 +101,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
   }
 
   Future<void> _showBoxPopup({BoxItem? boxToEdit, int? index}) async {
+    _boxSearchFocusNode.unfocus();
+
     _editingBox = boxToEdit;
     _editingIndex = index;
     _isNewDraft = false;
@@ -181,6 +187,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           child: IconButton(
                             icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
                             onPressed: () async {
+                              _boxSearchFocusNode.unfocus();
                               final scannedCode = await Navigator.push<String>(
                                 context,
                                 MaterialPageRoute(
@@ -346,6 +353,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
         );
       },
     ).whenComplete(() {
+      _boxSearchFocusNode.unfocus();
+
       if (_isNewDraft && _editingBox != null && _editingBox!.consignmentNo.isEmpty) {
         widget.vehicleEntry.boxes.remove(_editingBox);
         widget.vehicleEntry.save();
@@ -362,10 +371,11 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
   }
 
   void _showExportMenu() {
+    _boxSearchFocusNode.unfocus();
+
     final entry = widget.vehicleEntry;
     final activeBoxes = entry.boxes.where((b) => !b.isDeleted && b.consignmentNo.isNotEmpty).toList();
 
-    // Context ko pehle save kar lein taaki async gap ke baad crash na ho
     final parentContext = context;
     final messenger = ScaffoldMessenger.of(parentContext);
 
@@ -395,12 +405,10 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     Navigator.pop(sheetContext);
                     try {
                       final slipWidget = _buildDigitalSlip(entry, activeBoxes);
-
-                      // captureFromWidget null return nahi karta, isliye direct use karenge
                       final imageBytes = await _screenshotController.captureFromWidget(
                         slipWidget,
                         pixelRatio: 2.0,
-                        context: parentContext, // Yahan parent context use karenge
+                        context: parentContext,
                       );
 
                       final directory = await getTemporaryDirectory();
@@ -428,7 +436,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     );
   }
 
-  // Modern Digital Slip (Infographic Report) Widget
   Widget _buildDigitalSlip(VehicleEntry entry, List<BoxItem> activeBoxes) {
     return Material(
       color: Colors.white,
@@ -439,7 +446,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Header Section
             Container(
               width: double.infinity,
               color: Colors.blue[800],
@@ -449,9 +455,9 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('LT Operations', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                      const Icon(Icons.local_shipping, color: Colors.white, size: 30),
+                    children: const [
+                      Text('LT Operations', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                      Icon(Icons.local_shipping, color: Colors.white, size: 30),
                     ],
                   ),
                   const Text('Transport Supervisor Report', style: TextStyle(color: Colors.white70, fontSize: 14)),
@@ -463,14 +469,11 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                 ],
               ),
             ),
-
-            // 2. Body Content
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Vehicle Info Block
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -509,8 +512,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
-
-                  // Summary Metrics
                   Row(
                     children: [
                       _buildMetricBox('Total Boxes', entry.totalReceivedBoxes.toString(), Colors.blue),
@@ -521,8 +522,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
-
-                  // Table Header
                   Container(
                     padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                     decoration: BoxDecoration(color: Colors.grey[200], borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
@@ -537,8 +536,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       ],
                     ),
                   ),
-
-                  // Table Rows
                   ...activeBoxes.map((box) {
                     final shortage = box.shortage;
                     return Container(
@@ -570,10 +567,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       ),
                     );
                   }).toList(),
-
                   const SizedBox(height: 30),
-
-                  // Footer Section
                   Row(
                     children: List.generate(
                         50,
@@ -596,7 +590,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     );
   }
 
-  // Helper widget for Metric Boxes
   Widget _buildMetricBox(String title, String value, Color color) {
     return Expanded(
       child: Container(
@@ -642,7 +635,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
           IconButton(
             icon: const Icon(Icons.edit_document),
             onPressed: () async {
-              FocusScope.of(context).unfocus(); // Keyboard/Focus hatane ke liye
+              _boxSearchFocusNode.unfocus();
               await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -650,6 +643,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                 ),
               );
               if (mounted) {
+                _boxSearchFocusNode.unfocus();
                 setState(() {});
               }
             },
@@ -657,218 +651,226 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
           IconButton(icon: const Icon(Icons.ios_share), onPressed: _showExportMenu),
         ],
       ),
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            color: Colors.grey[200],
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(entry.vehicleNumber, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    Text(entry.driverName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(entry.driverMobile, style: const TextStyle(fontSize: 14, color: Colors.grey)),
-                const Divider(thickness: 1, height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Total Boxes: ${entry.totalReceivedBoxes}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    if (entry.totalShortage > 0)
-                      Text('Shortage: ${entry.totalShortage}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red))
-                    else if (entry.totalShortage < 0)
-                      Text('Extra: ${-entry.totalShortage}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue))
-                    else
-                      const Text('All Perfect', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Total Consignment Entries: ${allActiveBoxes.length}',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black54),
-                ),
-              ],
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-            child: TextField(
-              controller: _boxSearchController,
-              onChanged: (val) {
-                setState(() {
-                  _boxSearchQuery = val.toLowerCase();
-                });
-              },
-              decoration: InputDecoration(
-                labelText: 'Search Consignment, Company, Mode...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _boxSearchQuery.isNotEmpty
-                    ? IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    _boxSearchController.clear();
-                    setState(() {
-                      _boxSearchQuery = '';
-                    });
-                  },
-                )
-                    : null,
-              ),
-            ),
-          ),
-
-          if (_boxSearchQuery.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '${activeBoxes.length} consignments found',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
-                ),
-              ),
-            ),
-
-          Expanded(
-            child: activeBoxes.isEmpty
-                ? Center(
-              child: Text(
-                _boxSearchQuery.isEmpty
-                    ? 'Koi box add nahi hua. \n+ dabakar box add karein.'
-                    : 'Koi box is search se match nahi hua.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-            )
-                : ListView.builder(
-              controller: _listScrollController,
-              padding: const EdgeInsets.all(12),
-              itemCount: activeBoxes.length,
-              itemBuilder: (context, index) {
-                final box = activeBoxes[index];
-                final shortage = box.shortage;
-                final originalIndex = entry.boxes.indexOf(box);
-
-                return Card(
-                  color: box.isDamaged ? Colors.red[50] : Colors.white,
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(
-                      color: box.isDamaged
-                          ? Colors.red
-                          : (shortage > 0 ? Colors.orange : (shortage < 0 ? Colors.blue : Colors.transparent)),
-                      width: 1.5,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
+      // GestureDetector wraps the body to dismiss keyboard on tapping outside
+      body: GestureDetector(
+        onTap: () {
+          FocusManager.instance.primaryFocus?.unfocus();
+        },
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              color: Colors.grey[200],
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(entry.vehicleNumber, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      Text(entry.driverName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                    ],
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 4),
+                  Text(entry.driverMobile, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+                  const Divider(thickness: 1, height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Total Boxes: ${entry.totalReceivedBoxes}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      if (entry.totalShortage > 0)
+                        Text('Shortage: ${entry.totalShortage}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red))
+                      else if (entry.totalShortage < 0)
+                        Text('Extra: ${-entry.totalShortage}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue))
+                      else
+                        const Text('All Perfect', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Total Consignment Entries: ${allActiveBoxes.length}',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black54),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+              child: TextField(
+                controller: _boxSearchController,
+                focusNode: _boxSearchFocusNode,
+                onChanged: (val) {
+                  setState(() {
+                    _boxSearchQuery = val.toLowerCase();
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: 'Search Consignment, Company, Mode...',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _boxSearchQuery.isNotEmpty
+                      ? IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _boxSearchController.clear();
+                      setState(() {
+                        _boxSearchQuery = '';
+                      });
+                    },
+                  )
+                      : null,
+                ),
+              ),
+            ),
+            if (_boxSearchQuery.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${activeBoxes.length} consignments found',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: activeBoxes.isEmpty
+                  ? Center(
+                child: Text(
+                  _boxSearchQuery.isEmpty
+                      ? 'Koi box add nahi hua. \n+ dabakar box add karein.'
+                      : 'Koi box is search se match nahi hua.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+              )
+                  : ListView.builder(
+                controller: _listScrollController,
+                padding: const EdgeInsets.all(12),
+                itemCount: activeBoxes.length,
+                itemBuilder: (context, index) {
+                  final box = activeBoxes[index];
+                  final shortage = box.shortage;
+                  final originalIndex = entry.boxes.indexOf(box);
+
+                  return Card(
+                    color: box.isDamaged ? Colors.red[50] : Colors.white,
+                    shape: RoundedRectangleBorder(
+                      side: BorderSide(
+                        color: box.isDamaged
+                            ? Colors.red
+                            : (shortage > 0 ? Colors.orange : (shortage < 0 ? Colors.blue : Colors.transparent)),
+                        width: 1.5,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(box.consignmentNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                const SizedBox(height: 2),
+                                Text(box.companyName, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Exp: ${box.expectedBoxes} | Recv: ${box.receivedBoxes} ',
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                                    ),
+                                    if (shortage == 0)
+                                      const Icon(Icons.check_circle, color: Colors.green, size: 16)
+                                    else if (shortage > 0)
+                                      Text(' (Short: $shortage)', style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.bold))
+                                    else if (shortage < 0)
+                                        Text(' (Extra: ${-shortage})', style: const TextStyle(color: Colors.blue, fontSize: 13, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                                Text(
+                                  'Mode: ${box.transportMode}',
+                                  style: TextStyle(fontSize: 13, color: Colors.purple[700], fontWeight: FontWeight.w500),
+                                ),
+                                if (box.isDamaged)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2.0),
+                                    child: Text(
+                                      'Damaged: ${box.damagedCount}',
+                                      style: TextStyle(fontSize: 13, color: Colors.red[700], fontWeight: FontWeight.w500),
+                                    ),
+                                  ),
+                                if (box.createdAt != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4.0),
+                                    child: Text(
+                                      'Added at ${box.createdAt!.hour.toString().padLeft(2, '0')}:${box.createdAt!.minute.toString().padLeft(2, '0')} Date: ${box.createdAt!.day}/${box.createdAt!.month}/${box.createdAt!.year}',
+                                      style: const TextStyle(fontSize: 10, color: Colors.grey, fontStyle: FontStyle.italic),
+                                    ),
+                                  ),
+                                if (box.lastEditedAt != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2.0),
+                                    child: Text(
+                                      'Edited at ${box.lastEditedAt!.hour.toString().padLeft(2, '0')}:${box.lastEditedAt!.minute.toString().padLeft(2, '0')} Date: ${box.lastEditedAt!.day}/${box.lastEditedAt!.month}/${box.lastEditedAt!.year}',
+                                      style: const TextStyle(fontSize: 10, color: Colors.blueGrey, fontStyle: FontStyle.italic),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Column(
                             children: [
-                              Text(box.consignmentNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                              const SizedBox(height: 2),
-                              Text(box.companyName, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Text(
-                                    'Exp: ${box.expectedBoxes} | Recv: ${box.receivedBoxes} ',
-                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                                  ),
-                                  if (shortage == 0)
-                                    const Icon(Icons.check_circle, color: Colors.green, size: 16)
-                                  else if (shortage > 0)
-                                    Text(' (Short: $shortage)', style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.bold))
-                                  else if (shortage < 0)
-                                      Text(' (Extra: ${-shortage})', style: const TextStyle(color: Colors.blue, fontSize: 13, fontWeight: FontWeight.bold)),
-                                ],
+                              IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                                onPressed: () => _showBoxPopup(boxToEdit: box, index: originalIndex),
                               ),
-                              Text(
-                                'Mode: ${box.transportMode}',
-                                style: TextStyle(fontSize: 13, color: Colors.purple[700], fontWeight: FontWeight.w500),
+                              const SizedBox(height: 16),
+                              IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                onPressed: () {
+                                  setState(() {
+                                    box.isDeleted = true;
+                                    final idx = widget.vehicleEntry.boxes.indexOf(box);
+                                    if (idx != -1) {
+                                      widget.vehicleEntry.boxes[idx] = box;
+                                    }
+                                    widget.vehicleEntry.lastEditedAt = DateTime.now();
+                                    widget.vehicleEntry.save();
+                                    final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
+                                    hiveBox.flush();
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('${box.consignmentNo} Trash me bhej diya gaya!')),
+                                  );
+                                },
                               ),
-                              if (box.isDamaged)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2.0),
-                                  child: Text(
-                                    'Damaged: ${box.damagedCount}',
-                                    style: TextStyle(fontSize: 13, color: Colors.red[700], fontWeight: FontWeight.w500),
-                                  ),
-                                ),
-                              if (box.createdAt != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4.0),
-                                  child: Text(
-                                    'Added at ${box.createdAt!.hour.toString().padLeft(2, '0')}:${box.createdAt!.minute.toString().padLeft(2, '0')} Date: ${box.createdAt!.day}/${box.createdAt!.month}/${box.createdAt!.year}',
-                                    style: const TextStyle(fontSize: 10, color: Colors.grey, fontStyle: FontStyle.italic),
-                                  ),
-                                ),
-                              if (box.lastEditedAt != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2.0),
-                                  child: Text(
-                                    'Edited at ${box.lastEditedAt!.hour.toString().padLeft(2, '0')}:${box.lastEditedAt!.minute.toString().padLeft(2, '0')} Date: ${box.lastEditedAt!.day}/${box.lastEditedAt!.month}/${box.lastEditedAt!.year}',
-                                    style: const TextStyle(fontSize: 10, color: Colors.blueGrey, fontStyle: FontStyle.italic),
-                                  ),
-                                ),
                             ],
                           ),
-                        ),
-                        Column(
-                          children: [
-                            IconButton(
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-                              onPressed: () => _showBoxPopup(boxToEdit: box, index: originalIndex),
-                            ),
-                            const SizedBox(height: 16),
-                            IconButton(
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                              onPressed: () {
-                                setState(() {
-                                  box.isDeleted = true;
-                                  final idx = widget.vehicleEntry.boxes.indexOf(box);
-                                  if (idx != -1) {
-                                    widget.vehicleEntry.boxes[idx] = box;
-                                  }
-                                  widget.vehicleEntry.lastEditedAt = DateTime.now();
-                                  widget.vehicleEntry.save();
-                                  final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
-                                  hiveBox.flush();
-                                });
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('${box.consignmentNo} Trash me bhej diya gaya!')),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showBoxPopup(),
+        onPressed: () {
+          _boxSearchFocusNode.unfocus();
+          _showBoxPopup();
+        },
         backgroundColor: Colors.blue[800],
         child: const Icon(Icons.add, color: Colors.white),
       ),

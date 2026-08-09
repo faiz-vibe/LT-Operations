@@ -8,9 +8,6 @@ import 'trash_screen.dart';
 import 'manage_suggestions_screen.dart';
 import '../services/backup_service.dart';
 
-// i am your dad
-
-
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -22,15 +19,17 @@ class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final FocusNode _searchFocusNode = FocusNode();
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
   Future<void> _navigateToEntry({VehicleEntry? existingEntry}) async {
-    FocusScope.of(context).unfocus(); // Keyboard/Focus hatane ke liye
+    _searchFocusNode.unfocus();
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -38,12 +37,13 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (mounted) {
+      _searchFocusNode.unfocus();
       setState(() {});
     }
   }
 
   Future<void> _navigateToConsignment(VehicleEntry entry) async {
-    FocusScope.of(context).unfocus(); // Keyboard/Focus hatane ke liye
+    _searchFocusNode.unfocus();
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -51,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (mounted) {
+      _searchFocusNode.unfocus();
       setState(() {});
     }
   }
@@ -154,7 +155,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const TrashScreen()));
                   },
                 ),
-                // Naya Manage Dictionary Option
                 ListTile(
                   leading: Icon(Icons.menu_book, color: Colors.purple[800]),
                   title: const Text('Manage Dictionary'),
@@ -167,23 +167,19 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
+          // Body wrapped with GestureDetector to dismiss keyboard on outside tap
           body: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            // Naya: Bahar click karne par keyboard band kare
             onTap: () {
-              FocusScope.of(context).unfocus();
+              FocusManager.instance.primaryFocus?.unfocus();
             },
-            onHorizontalDragEnd: (details) {
-              if (details.primaryVelocity != null && details.primaryVelocity! > 100) {
-                _scaffoldKey.currentState?.openDrawer();
-              }
-            },
+            behavior: HitTestBehavior.opaque,
             child: Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
                   child: TextField(
                     controller: _searchController,
+                    focusNode: _searchFocusNode,
                     onChanged: (val) {
                       setState(() {
                         _searchQuery = val;
@@ -358,6 +354,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () {
+              _searchFocusNode.unfocus();
               final box = Hive.box<VehicleEntry>('vehicle_entries');
               final draftEntry = box.values.cast<VehicleEntry?>().firstWhere(
                     (entry) => entry != null && !entry.isCompleted && !entry.isDeleted,
