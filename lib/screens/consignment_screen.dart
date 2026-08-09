@@ -3,7 +3,6 @@ import 'package:hive/hive.dart';
 import 'dart:io';
 import 'package:screenshot/screenshot.dart';
 import 'package:path_provider/path_provider.dart';
-
 import '../models/vehicle_entry.dart';
 import '../models/box_item.dart';
 import '../services/export_service.dart';
