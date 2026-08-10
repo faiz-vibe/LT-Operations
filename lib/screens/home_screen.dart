@@ -172,6 +172,12 @@ class _HomeScreenState extends State<HomeScreen> {
             onTap: () {
               FocusManager.instance.primaryFocus?.unfocus();
             },
+            // Yeh line wapas add ki hai swipe-to-open drawer ke liye
+            onHorizontalDragEnd: (details) {
+              if (details.primaryVelocity != null && details.primaryVelocity! > 100) {
+                _scaffoldKey.currentState?.openDrawer();
+              }
+            },
             behavior: HitTestBehavior.opaque,
             child: Column(
               children: [
