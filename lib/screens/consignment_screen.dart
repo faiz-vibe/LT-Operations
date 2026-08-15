@@ -3,6 +3,7 @@ import 'package:hive/hive.dart';
 import 'dart:io';
 import 'package:screenshot/screenshot.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../models/vehicle_entry.dart';
 import '../models/box_item.dart';
@@ -35,6 +36,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
 
   bool _isDamaged = false;
   String _selectedMode = 'Surface';
+  List<String> _damagePhotos = []; // Naya variable for photos
 
   BoxItem? _editingBox;
   bool _isNewDraft = false;
@@ -65,6 +67,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     _editingBox!.damagedCount = _isDamaged ? (int.tryParse(_damagedCountController.text) ?? 0) : 0;
     _editingBox!.damageDetails = _isDamaged ? _damageDetailsController.text : '';
     _editingBox!.transportMode = _selectedMode;
+    _editingBox!.damagePhotos = _damagePhotos; // Photos save karein
     _editingBox!.lastEditedAt = DateTime.now();
 
     if (_editingIndex != null && _editingIndex! < widget.vehicleEntry.boxes.length) {
@@ -116,6 +119,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       _damagedCountController.text = boxToEdit.damagedCount.toString();
       _damageDetailsController.text = boxToEdit.damageDetails;
       _selectedMode = boxToEdit.transportMode;
+      _damagePhotos = List.from(boxToEdit.damagePhotos); // Purani photos load karein
     } else {
       _isNewDraft = true;
       _editingBox = BoxItem(
@@ -138,6 +142,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       _damageDetailsController.clear();
       _isDamaged = false;
       _selectedMode = 'Surface';
+      _damagePhotos.clear(); // Naye box ke liye khaali karein
     }
 
     await showModalBottomSheet(
@@ -312,6 +317,65 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           FocusScope.of(context).unfocus();
                         },
                       ),
+
+                      // Naya: Damage Photos Upload Button aur Thumbnails
+                      const SizedBox(height: 10),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.camera_alt, color: Colors.white),
+                        label: const Text('Upload Damage Photos', style: TextStyle(color: Colors.white)),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700]),
+                        onPressed: () async {
+                          final ImagePicker picker = ImagePicker();
+                          final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 50);
+                          if (photo != null) {
+                            setModalState(() {
+                              _damagePhotos.add(photo.path);
+                            });
+                            _forceSave();
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      if (_damagePhotos.isNotEmpty)
+                        SizedBox(
+                          height: 90,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _damagePhotos.length,
+                            itemBuilder: (context, index) {
+                              return Stack(
+                                children: [
+                                  Container(
+                                    margin: const EdgeInsets.only(right: 8),
+                                    child: Image.file(
+                                      File(_damagePhotos[index]),
+                                      width: 80,
+                                      height: 80,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                  Positioned(
+                                    right: 0,
+                                    top: 0,
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        setModalState(() {
+                                          _damagePhotos.removeAt(index);
+                                        });
+                                        _forceSave();
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                        child: const Icon(Icons.close, size: 14, color: Colors.white),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
                     ],
                     const SizedBox(height: 15),
                     DropdownButtonFormField<String>(
@@ -437,6 +501,9 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
   }
 
   Widget _buildDigitalSlip(VehicleEntry entry, List<BoxItem> activeBoxes) {
+    // Check if any box has damage photos
+    bool hasDamagePhotos = activeBoxes.any((b) => b.isDamaged && b.damagePhotos.isNotEmpty);
+
     return Material(
       color: Colors.white,
       child: Container(
@@ -567,6 +634,36 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       ),
                     );
                   }).toList(),
+
+                  // Naya: Damage Photos Section in Digital Slip
+                  if (hasDamagePhotos) ...[
+                    const SizedBox(height: 20),
+                    const Text('Damage Proof Photos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red)),
+                    const SizedBox(height: 10),
+                    ...activeBoxes.where((b) => b.isDamaged && b.damagePhotos.isNotEmpty).map((box) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Consignment: ${box.consignmentNo}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: box.damagePhotos.map((path) {
+                              return Image.file(
+                                File(path),
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                      );
+                    }).toList(),
+                  ],
+
                   const SizedBox(height: 30),
                   Row(
                     children: List.generate(
@@ -651,7 +748,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
           IconButton(icon: const Icon(Icons.ios_share), onPressed: _showExportMenu),
         ],
       ),
-      // GestureDetector wraps the body to dismiss keyboard on tapping outside
       body: GestureDetector(
         onTap: () {
           FocusManager.instance.primaryFocus?.unfocus();

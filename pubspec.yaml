@@ -36,6 +36,7 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
 
+
   # 2. Barcode Scanning ke liye
   mobile_scanner: ^3.5.5
 
@@ -55,6 +56,7 @@ dependencies:
   share_plus: ^7.2.1
   file_picker: ^6.1.1
 
+  image_picker: ^1.0.4
   # 7. Date aur Time format karne ke liye
   intl: ^0.18.1
 
