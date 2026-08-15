@@ -37,8 +37,14 @@ class BoxItem extends HiveObject {
   @HiveField(10)
   DateTime? createdAt;
 
-  @HiveField(11) // Naya field add hua
+  @HiveField(11)
   String transportMode;
+
+  @HiveField(12) // Naya field
+  String sourceLocation;
+
+  @HiveField(13) // Naya field
+  String destinationLocation;
 
   BoxItem({
     required this.consignmentNo,
@@ -52,12 +58,13 @@ class BoxItem extends HiveObject {
     this.damagePhotos = const [],
     this.lastEditedAt,
     this.createdAt,
-    this.transportMode = 'Surface', // Default Surface
+    this.transportMode = 'Surface',
+    this.sourceLocation = '',
+    this.destinationLocation = '',
   });
 
   int get shortage => expectedBoxes - receivedBoxes;
 
-  // JSON Export/Import ke liye
   Map<String, dynamic> toJson() => {
     'consignmentNo': consignmentNo,
     'companyName': companyName,
@@ -70,6 +77,8 @@ class BoxItem extends HiveObject {
     'createdAt': createdAt?.toIso8601String(),
     'lastEditedAt': lastEditedAt?.toIso8601String(),
     'transportMode': transportMode,
+    'sourceLocation': sourceLocation,
+    'destinationLocation': destinationLocation,
   };
 
   factory BoxItem.fromJson(Map<String, dynamic> json) {
@@ -85,6 +94,8 @@ class BoxItem extends HiveObject {
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : null,
       lastEditedAt: json['lastEditedAt'] != null ? DateTime.parse(json['lastEditedAt'] as String) : null,
       transportMode: json['transportMode'] as String? ?? 'Surface',
+      sourceLocation: json['sourceLocation'] as String? ?? '',
+      destinationLocation: json['destinationLocation'] as String? ?? '',
     );
   }
 }

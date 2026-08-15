@@ -20,6 +20,7 @@ class _ManageSuggestionsScreenState extends State<ManageSuggestionsScreen> {
     'Driver Mobile': 'driver_mobiles',
     'Company Name': 'companies',
     'Damage Details': 'damage_details',
+    'Locations': 'locations', // Naya category add hua
   };
 
   void _addWord() {

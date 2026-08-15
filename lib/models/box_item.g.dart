@@ -29,13 +29,15 @@ class BoxItemAdapter extends TypeAdapter<BoxItem> {
       lastEditedAt: fields[9] as DateTime?,
       createdAt: fields[10] as DateTime?,
       transportMode: fields[11] as String,
+      sourceLocation: fields[12] as String,
+      destinationLocation: fields[13] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, BoxItem obj) {
     writer
-      ..writeByte(12)
+      ..writeByte(14)
       ..writeByte(0)
       ..write(obj.consignmentNo)
       ..writeByte(1)
@@ -59,7 +61,11 @@ class BoxItemAdapter extends TypeAdapter<BoxItem> {
       ..writeByte(10)
       ..write(obj.createdAt)
       ..writeByte(11)
-      ..write(obj.transportMode);
+      ..write(obj.transportMode)
+      ..writeByte(12)
+      ..write(obj.sourceLocation)
+      ..writeByte(13)
+      ..write(obj.destinationLocation);
   }
 
   @override

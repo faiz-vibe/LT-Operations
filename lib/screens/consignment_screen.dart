@@ -30,13 +30,16 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
   final _damagedCountController = TextEditingController(text: '0');
   final _damageDetailsController = TextEditingController();
   final _boxSearchController = TextEditingController();
-  String _boxSearchQuery = '';
+  final _sourceLocationController = TextEditingController();
+  final _destinationLocationController = TextEditingController();
 
+  String _boxSearchQuery = '';
   final FocusNode _boxSearchFocusNode = FocusNode();
 
   bool _isDamaged = false;
   String _selectedMode = 'Surface';
   List<String> _damagePhotos = [];
+  bool _damageCountError = false;
 
   BoxItem? _editingBox;
   bool _isNewDraft = false;
@@ -53,6 +56,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     _boxSearchController.dispose();
     _listScrollController.dispose();
     _boxSearchFocusNode.dispose();
+    _sourceLocationController.dispose();
+    _destinationLocationController.dispose();
     super.dispose();
   }
 
@@ -68,6 +73,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     _editingBox!.damageDetails = _isDamaged ? _damageDetailsController.text : '';
     _editingBox!.transportMode = _selectedMode;
     _editingBox!.damagePhotos = _damagePhotos;
+    _editingBox!.sourceLocation = _sourceLocationController.text;
+    _editingBox!.destinationLocation = _destinationLocationController.text;
     _editingBox!.lastEditedAt = DateTime.now();
 
     if (_editingIndex != null && _editingIndex! < widget.vehicleEntry.boxes.length) {
@@ -99,6 +106,15 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       dBox.put(_editingBox!.damageDetails, _editingBox!.damageDetails);
     }
 
+    // Naya: Locations ko sirf update/save dabane par dictionary me save karein
+    final locBox = Hive.box<String>('locations');
+    if (_editingBox!.sourceLocation.isNotEmpty && !locBox.containsKey(_editingBox!.sourceLocation)) {
+      locBox.put(_editingBox!.sourceLocation, _editingBox!.sourceLocation);
+    }
+    if (_editingBox!.destinationLocation.isNotEmpty && !locBox.containsKey(_editingBox!.destinationLocation)) {
+      locBox.put(_editingBox!.destinationLocation, _editingBox!.destinationLocation);
+    }
+
     _forceSave();
     Navigator.pop(sheetContext);
   }
@@ -120,6 +136,9 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       _damageDetailsController.text = boxToEdit.damageDetails;
       _selectedMode = boxToEdit.transportMode;
       _damagePhotos = List.from(boxToEdit.damagePhotos);
+      _sourceLocationController.text = boxToEdit.sourceLocation;
+      _destinationLocationController.text = boxToEdit.destinationLocation;
+      _damageCountError = false;
     } else {
       _isNewDraft = true;
       _editingBox = BoxItem(
@@ -140,9 +159,12 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       _receivedController.text = '0';
       _damagedCountController.text = '0';
       _damageDetailsController.clear();
+      _sourceLocationController.clear();
+      _destinationLocationController.clear();
       _isDamaged = false;
       _selectedMode = 'Surface';
       _damagePhotos.clear();
+      _damageCountError = false;
     }
 
     await showModalBottomSheet(
@@ -244,6 +266,89 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       },
                     ),
                     const SizedBox(height: 10),
+
+                    // Naya: Location (Source To Destination) with Autocomplete
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Autocomplete<String>(
+                            initialValue: TextEditingValue(text: _sourceLocationController.text),
+                            fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                              controller.addListener(() {
+                                _sourceLocationController.text = controller.text;
+                                _forceSave();
+                              });
+                              return TextField(
+                                controller: controller,
+                                focusNode: focusNode,
+                                onEditingComplete: onEditingComplete,
+                                textCapitalization: TextCapitalization.words,
+                                decoration: const InputDecoration(
+                                  labelText: 'From (Source)',
+                                  border: OutlineInputBorder(),
+                                  prefixIcon: Icon(Icons.location_on),
+                                ),
+                              );
+                            },
+                            optionsBuilder: (TextEditingValue textEditingValue) {
+                              if (textEditingValue.text.isEmpty) {
+                                return const Iterable<String>.empty();
+                              }
+                              final locBox = Hive.box<String>('locations');
+                              return locBox.values.where((loc) =>
+                                  loc.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                            },
+                            onSelected: (String selection) {
+                              _sourceLocationController.text = selection;
+                              _forceSave();
+                              FocusScope.of(context).unfocus();
+                            },
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.only(top: 15.0, left: 5, right: 5),
+                          child: Text('To', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        ),
+                        Expanded(
+                          child: Autocomplete<String>(
+                            initialValue: TextEditingValue(text: _destinationLocationController.text),
+                            fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                              controller.addListener(() {
+                                _destinationLocationController.text = controller.text;
+                                _forceSave();
+                              });
+                              return TextField(
+                                controller: controller,
+                                focusNode: focusNode,
+                                onEditingComplete: onEditingComplete,
+                                textCapitalization: TextCapitalization.words,
+                                decoration: const InputDecoration(
+                                  labelText: 'To (Dest)',
+                                  border: OutlineInputBorder(),
+                                  prefixIcon: Icon(Icons.flag),
+                                ),
+                              );
+                            },
+                            optionsBuilder: (TextEditingValue textEditingValue) {
+                              if (textEditingValue.text.isEmpty) {
+                                return const Iterable<String>.empty();
+                              }
+                              final locBox = Hive.box<String>('locations');
+                              return locBox.values.where((loc) =>
+                                  loc.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                            },
+                            onSelected: (String selection) {
+                              _destinationLocationController.text = selection;
+                              _forceSave();
+                              FocusScope.of(context).unfocus();
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
                     Row(
                       children: [
                         Expanded(
@@ -280,8 +385,23 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       TextField(
                         controller: _damagedCountController,
                         keyboardType: TextInputType.number,
-                        onChanged: (val) => _forceSave(),
-                        decoration: const InputDecoration(labelText: 'Kitne Box Damage Hue?', border: OutlineInputBorder(), prefixIcon: Icon(Icons.broken_image)),
+                        onChanged: (val) {
+                          setModalState(() {
+                            _damageCountError = val.isEmpty || (int.tryParse(val) ?? 0) <= 0;
+                          });
+                          _forceSave();
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'Kitne Box Damage Hue?',
+                          border: OutlineInputBorder(
+                            borderSide: BorderSide(color: _damageCountError ? Colors.red : Colors.grey),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: _damageCountError ? Colors.red : Colors.blue, width: 2),
+                          ),
+                          prefixIcon: Icon(Icons.broken_image, color: _damageCountError ? Colors.red : null),
+                          errorText: _damageCountError ? 'Pehle kitna box damage hai likhein' : null,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Autocomplete<String>(
@@ -323,6 +443,21 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         label: const Text('Upload Damage Photos', style: TextStyle(color: Colors.white)),
                         style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700]),
                         onPressed: () async {
+                          int damageCount = int.tryParse(_damagedCountController.text) ?? 0;
+
+                          if (_damagedCountController.text.isEmpty || damageCount <= 0) {
+                            setModalState(() {
+                              _damageCountError = true;
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Pehle kitne box damage hue ye likhein!'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                            return;
+                          }
+
                           final ImagePicker picker = ImagePicker();
                           final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 50);
                           if (photo != null) {
@@ -473,7 +608,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                                   onPressed: () {
                                     setModalState(() {
                                       box.isDeleted = false;
-                                      // YAHAN FIX HUA HAI: List ko force update karne ke liye
                                       final idx = widget.vehicleEntry.boxes.indexOf(box);
                                       if (idx != -1) {
                                         widget.vehicleEntry.boxes[idx] = box;
@@ -484,7 +618,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                                       hiveBox.flush();
                                       deletedBoxes.removeAt(index);
                                     });
-                                    // Parent screen ko turant refresh karein
                                     setState(() {});
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(content: Text('${box.consignmentNo} successfully restored!')),
@@ -602,7 +735,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     await ExportService.exportToExcel(entry);
                   }
               ),
-              // Naya: PDF Export Option
               ListTile(
                   leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
                   title: const Text('Export to PDF (High Quality)'),
@@ -719,6 +851,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       children: const [
                         Expanded(flex: 3, child: Text('Consignment', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                         Expanded(flex: 2, child: Text('Company', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        Expanded(flex: 2, child: Text('Route', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                         Expanded(flex: 1, child: Text('Exp', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12), textAlign: TextAlign.center)),
                         Expanded(flex: 1, child: Text('Recv', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12), textAlign: TextAlign.center)),
                         Expanded(flex: 1, child: Text('Short', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12), textAlign: TextAlign.center)),
@@ -738,6 +871,14 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         children: [
                           Expanded(flex: 3, child: Text(box.consignmentNo, style: const TextStyle(fontSize: 12))),
                           Expanded(flex: 2, child: Text(box.companyName, style: const TextStyle(fontSize: 12))),
+                          Expanded(
+                              flex: 2,
+                              child: Text(
+                                '${box.sourceLocation} To ${box.destinationLocation}',
+                                style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
+                                overflow: TextOverflow.ellipsis,
+                              )
+                          ),
                           Expanded(flex: 1, child: Text(box.expectedBoxes.toString(), style: const TextStyle(fontSize: 12), textAlign: TextAlign.center)),
                           Expanded(flex: 1, child: Text(box.receivedBoxes.toString(), style: const TextStyle(fontSize: 12), textAlign: TextAlign.center)),
                           Expanded(
@@ -842,7 +983,9 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       final matchesExpected = b.expectedBoxes.toString().contains(_boxSearchQuery);
       final matchesReceived = b.receivedBoxes.toString().contains(_boxSearchQuery);
       final matchesMode = b.transportMode.toLowerCase().contains(_boxSearchQuery);
-      return matchesConsignment || matchesCompany || matchesExpected || matchesReceived || matchesMode;
+      final matchesSource = b.sourceLocation.toLowerCase().contains(_boxSearchQuery);
+      final matchesDest = b.destinationLocation.toLowerCase().contains(_boxSearchQuery);
+      return matchesConsignment || matchesCompany || matchesExpected || matchesReceived || matchesMode || matchesSource || matchesDest;
     }).toList();
 
     return Scaffold(
@@ -930,7 +1073,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                   });
                 },
                 decoration: InputDecoration(
-                  labelText: 'Search Consignment, Company, Mode...',
+                  labelText: 'Search Consignment, Company, Mode, Location...',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _boxSearchQuery.isNotEmpty
@@ -1002,6 +1145,14 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                                 const SizedBox(height: 2),
                                 Text(box.companyName, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
                                 const SizedBox(height: 4),
+                                if (box.sourceLocation.isNotEmpty || box.destinationLocation.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 4.0),
+                                    child: Text(
+                                      'Route: ${box.sourceLocation} To ${box.destinationLocation}',
+                                      style: TextStyle(fontSize: 12, color: Colors.teal[700], fontWeight: FontWeight.w500),
+                                    ),
+                                  ),
                                 Row(
                                   children: [
                                     Text(

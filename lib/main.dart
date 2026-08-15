@@ -26,9 +26,10 @@ void main() async {
   // Company names save karne ke liye naya box
   await Hive.openBox<String>('vehicles');
   await Hive.openBox<String>('drivers');
-  await Hive.openBox<String>('driver_mobiles'); // Naya box
+  await Hive.openBox<String>('driver_mobiles');
   await Hive.openBox<String>('companies');
   await Hive.openBox<String>('damage_details');
+  await Hive.openBox<String>('locations');
 
   runApp(const TransportSupervisorApp());
 }
