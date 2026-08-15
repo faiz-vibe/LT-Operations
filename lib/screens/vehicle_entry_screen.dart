@@ -39,6 +39,24 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    // Agar naye entry me kuch bhi type nahi hua hai, toh use delete kar do
+    if (_isNewEntry) {
+      // Check karein ki kisi bhi field me ek bhi alphabet ya number to nahi hai
+      bool isEmpty = _currentEntry.vehicleNumber.trim().isEmpty &&
+          _currentEntry.driverName.trim().isEmpty &&
+          _currentEntry.driverMobile.trim().isEmpty &&
+          _currentEntry.boxes.where((b) => !b.isDeleted && b.consignmentNo.isNotEmpty).isEmpty;
+
+      if (isEmpty) {
+        // Agar poori entry khaali hai, toh Trash me bhejne ke bajaye direct DB se delete kar do
+        _currentEntry.delete();
+      }
+    }
+    super.dispose();
+  }
+
   void _proceedOrSave() {
     if (_currentEntry.vehicleNumber.isEmpty || _currentEntry.driverName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -89,6 +89,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
         final trashCount = box.values.where((e) => e.isDeleted).length;
 
+        // Check karein ki koi incomplete entry (draft) hai ya nahi
+        final draftEntry = box.values.cast<VehicleEntry?>().firstWhere(
+              (entry) => entry != null && !entry.isCompleted && !entry.isDeleted,
+          orElse: () => null,
+        );
+
         return Scaffold(
           key: _scaffoldKey,
           appBar: AppBar(
@@ -167,18 +173,16 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          // Body wrapped with GestureDetector to dismiss keyboard on outside tap
           body: GestureDetector(
             onTap: () {
               FocusManager.instance.primaryFocus?.unfocus();
             },
-            // Yeh line wapas add ki hai swipe-to-open drawer ke liye
+            behavior: HitTestBehavior.opaque,
             onHorizontalDragEnd: (details) {
               if (details.primaryVelocity != null && details.primaryVelocity! > 100) {
                 _scaffoldKey.currentState?.openDrawer();
               }
             },
-            behavior: HitTestBehavior.opaque,
             child: Column(
               children: [
                 Padding(
@@ -358,46 +362,44 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () {
-              _searchFocusNode.unfocus();
-              final box = Hive.box<VehicleEntry>('vehicle_entries');
-              final draftEntry = box.values.cast<VehicleEntry?>().firstWhere(
-                    (entry) => entry != null && !entry.isCompleted && !entry.isDeleted,
-                orElse: () => null,
-              );
-
-              if (draftEntry != null) {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Incomplete Entry Found'),
-                    content: const Text('Aapke paas ek draft entry hai. Kya aap use continue karna chahte hai ya naya vehicle add karein?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _navigateToEntry();
-                        },
-                        child: const Text('Naya Vehicle'),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _navigateToEntry(existingEntry: draftEntry);
-                        },
-                        child: const Text('Draft Kholein'),
-                      ),
-                    ],
+          floatingActionButton: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Draft Button (Sirf tabhi dikhega jab koi incomplete entry hogi)
+              if (draftEntry != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: FloatingActionButton.extended(
+                    heroTag: 'draft_btn',
+                    onPressed: () {
+                      _searchFocusNode.unfocus();
+                      _navigateToEntry(existingEntry: draftEntry);
+                    },
+                    backgroundColor: Colors.orange[600],
+                    icon: const Icon(Icons.edit_note, color: Colors.white),
+                    label: const Text(
+                      'Resume Draft',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 14),
+                    ),
                   ),
-                );
-              } else {
-                _navigateToEntry();
-              }
-            },
-            backgroundColor: Colors.blue[800],
-            icon: const Icon(Icons.add, color: Colors.white),
-            label: const Text('New Vehicle', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+
+              // New Vehicle Button (Hamesha dikhega aur bada hoga)
+              FloatingActionButton.extended(
+                heroTag: 'new_vehicle_btn',
+                onPressed: () {
+                  _searchFocusNode.unfocus();
+                  _navigateToEntry(); // Hamesha nayi entry kholega
+                },
+                backgroundColor: Colors.blue[800],
+                icon: const Icon(Icons.add, color: Colors.white, size: 32),
+                label: const Text(
+                  'New Vehicle',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+            ],
           ),
         );
       },

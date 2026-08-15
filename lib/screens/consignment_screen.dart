@@ -36,7 +36,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
 
   bool _isDamaged = false;
   String _selectedMode = 'Surface';
-  List<String> _damagePhotos = []; // Naya variable for photos
+  List<String> _damagePhotos = [];
 
   BoxItem? _editingBox;
   bool _isNewDraft = false;
@@ -67,7 +67,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     _editingBox!.damagedCount = _isDamaged ? (int.tryParse(_damagedCountController.text) ?? 0) : 0;
     _editingBox!.damageDetails = _isDamaged ? _damageDetailsController.text : '';
     _editingBox!.transportMode = _selectedMode;
-    _editingBox!.damagePhotos = _damagePhotos; // Photos save karein
+    _editingBox!.damagePhotos = _damagePhotos;
     _editingBox!.lastEditedAt = DateTime.now();
 
     if (_editingIndex != null && _editingIndex! < widget.vehicleEntry.boxes.length) {
@@ -119,7 +119,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       _damagedCountController.text = boxToEdit.damagedCount.toString();
       _damageDetailsController.text = boxToEdit.damageDetails;
       _selectedMode = boxToEdit.transportMode;
-      _damagePhotos = List.from(boxToEdit.damagePhotos); // Purani photos load karein
+      _damagePhotos = List.from(boxToEdit.damagePhotos);
     } else {
       _isNewDraft = true;
       _editingBox = BoxItem(
@@ -142,7 +142,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       _damageDetailsController.clear();
       _isDamaged = false;
       _selectedMode = 'Surface';
-      _damagePhotos.clear(); // Naye box ke liye khaali karein
+      _damagePhotos.clear();
     }
 
     await showModalBottomSheet(
@@ -317,8 +317,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           FocusScope.of(context).unfocus();
                         },
                       ),
-
-                      // Naya: Damage Photos Upload Button aur Thumbnails
                       const SizedBox(height: 10),
                       ElevatedButton.icon(
                         icon: const Icon(Icons.camera_alt, color: Colors.white),
@@ -434,6 +432,117 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     });
   }
 
+  void _showTrashForThisVehicle() {
+    _boxSearchFocusNode.unfocus();
+
+    showModalBottomSheet(
+      context: context,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final deletedBoxes = widget.vehicleEntry.boxes.where((b) => b.isDeleted).toList();
+
+            return Container(
+              padding: const EdgeInsets.all(16),
+              height: MediaQuery.of(context).size.height * 0.6,
+              child: Column(
+                children: [
+                  const Text('Trash (Deleted Boxes)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Divider(),
+                  if (deletedBoxes.isEmpty)
+                    const Expanded(
+                      child: Center(
+                        child: Text('Trash khaali hai.\nKoi box delete nahi hua.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: deletedBoxes.length,
+                        itemBuilder: (context, index) {
+                          final box = deletedBoxes[index];
+                          return ListTile(
+                            title: Text(box.consignmentNo, style: const TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey)),
+                            subtitle: Text(box.companyName),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.restore, color: Colors.green),
+                                  tooltip: 'Restore',
+                                  onPressed: () {
+                                    setModalState(() {
+                                      box.isDeleted = false;
+                                      // YAHAN FIX HUA HAI: List ko force update karne ke liye
+                                      final idx = widget.vehicleEntry.boxes.indexOf(box);
+                                      if (idx != -1) {
+                                        widget.vehicleEntry.boxes[idx] = box;
+                                      }
+                                      widget.vehicleEntry.lastEditedAt = DateTime.now();
+                                      widget.vehicleEntry.save();
+                                      final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
+                                      hiveBox.flush();
+                                      deletedBoxes.removeAt(index);
+                                    });
+                                    // Parent screen ko turant refresh karein
+                                    setState(() {});
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('${box.consignmentNo} successfully restored!')),
+                                    );
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_forever, color: Colors.red),
+                                  tooltip: 'Delete Permanently',
+                                  onPressed: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (dialogContext) => AlertDialog(
+                                        title: const Text('Delete Permanently?'),
+                                        content: Text('Are you sure? ${box.consignmentNo} permanently delete ho jayega.'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(dialogContext),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                            onPressed: () {
+                                              setModalState(() {
+                                                widget.vehicleEntry.boxes.remove(box);
+                                                widget.vehicleEntry.save();
+                                                final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
+                                                hiveBox.flush();
+                                                deletedBoxes.removeAt(index);
+                                              });
+                                              setState(() {});
+                                              Navigator.pop(dialogContext);
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(content: Text('${box.consignmentNo} permanently deleted!')),
+                                              );
+                                            },
+                                            child: const Text('Delete'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _showExportMenu() {
     _boxSearchFocusNode.unfocus();
 
@@ -493,6 +602,21 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     await ExportService.exportToExcel(entry);
                   }
               ),
+              // Naya: PDF Export Option
+              ListTile(
+                  leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
+                  title: const Text('Export to PDF (High Quality)'),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    try {
+                      await ExportService.exportToPdf(entry);
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('PDF export failed: $e')),
+                      );
+                    }
+                  }
+              ),
             ],
           ),
         );
@@ -501,7 +625,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
   }
 
   Widget _buildDigitalSlip(VehicleEntry entry, List<BoxItem> activeBoxes) {
-    // Check if any box has damage photos
     bool hasDamagePhotos = activeBoxes.any((b) => b.isDamaged && b.damagePhotos.isNotEmpty);
 
     return Material(
@@ -635,7 +758,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     );
                   }).toList(),
 
-                  // Naya: Damage Photos Section in Digital Slip
                   if (hasDamagePhotos) ...[
                     const SizedBox(height: 20),
                     const Text('Damage Proof Photos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red)),
@@ -729,6 +851,11 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
         backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Deleted Boxes',
+            onPressed: _showTrashForThisVehicle,
+          ),
           IconButton(
             icon: const Icon(Icons.edit_document),
             onPressed: () async {
