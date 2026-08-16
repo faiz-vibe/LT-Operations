@@ -87,7 +87,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
 
                   if (image != null) {
                     // Image me barcode search karein
-                    final bool? success = await _controller.analyzeImage(image.path);
+                    final bool success = await _controller.analyzeImage(image.path);
 
                     // Agar image me barcode nahi mila
                     if (success != true && mounted) {

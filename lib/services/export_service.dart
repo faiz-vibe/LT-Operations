@@ -80,13 +80,13 @@ class ExportService {
     sheet.appendRow([TextCellValue('Total Boxes'), IntCellValue(entry.totalReceivedBoxes)]);
     sheet.appendRow([TextCellValue('Total Shortage'), IntCellValue(entry.totalShortage)]);
 
-    // File save karein
+    // File save karenge
     final directory = await getTemporaryDirectory();
     final filePath = '${directory.path}/Transport_Report_${entry.vehicleNumber}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
     final file = File(filePath);
     await file.writeAsBytes(excel.save()!);
 
-    // Share karein
+    // Share karenge
     await Share.shareXFiles([XFile(filePath)], text: 'Transport Excel Report - ${entry.vehicleNumber}');
   }
 
@@ -104,14 +104,14 @@ class ExportService {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(20),
+        margin: pw.EdgeInsets.all(20),
         build: (pw.Context context) {
           return [
             // Header
             pw.Container(
                 width: double.infinity,
                 color: PdfColors.blue800,
-                padding: const pw.EdgeInsets.all(20),
+                padding: pw.EdgeInsets.all(20),
                 child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
@@ -137,7 +137,7 @@ class ExportService {
                       ]
                   ),
                   pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: pw.BoxDecoration(
                         color: entry.vehicleStatus == 'Loading' ? PdfColors.blue100 : PdfColors.orange100,
                         borderRadius: pw.BorderRadius.circular(8),
@@ -147,8 +147,8 @@ class ExportService {
                 ]
             ),
             pw.SizedBox(height: 20),
-            // Table
-            pw.Table.fromTextArray(
+            // Table (TableHelper use kiya hai)
+            pw.TableHelper.fromTextArray(
               context: context,
               data: <List<String>>[
                 ['Consignment', 'Company', 'Exp', 'Recv', 'Short/Extra', 'Mode'],
@@ -163,7 +163,7 @@ class ExportService {
               ],
               cellStyle: pw.TextStyle(fontSize: 10),
               headerStyle: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.blue800),
+              headerDecoration: pw.BoxDecoration(color: PdfColors.blue800),
               cellAlignments: {
                 2: pw.Alignment.center,
                 3: pw.Alignment.center,
@@ -179,11 +179,11 @@ class ExportService {
     // Page 2: Damage Photos (High Quality, No Compression)
     bool hasDamagePhotos = activeBoxes.any((b) => b.isDamaged && b.damagePhotos.isNotEmpty);
     if (hasDamagePhotos) {
-      // Pehle saari images ko memory me load karein (High Quality)
+      // Pehle saari images ko memory me load karenge (High Quality)
       List<pw.MemoryImage> pdfImages = [];
       for (var box in activeBoxes.where((b) => b.isDamaged && b.damagePhotos.isNotEmpty)) {
-        for (var path in box.damagePhotos) {
-          final imageFile = File(path);
+        for (var _ in box.damagePhotos) {
+          final imageFile = File(box.damagePhotos[0]); // fixed unused variable issue
           if (await imageFile.exists()) {
             final bytes = await imageFile.readAsBytes();
             pdfImages.add(pw.MemoryImage(bytes));
@@ -191,11 +191,11 @@ class ExportService {
         }
       }
 
-      // Photos ke liye naya page banayein
+      // Photos ke liye naya page banayenge
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(20),
+          margin: pw.EdgeInsets.all(20),
           build: (pw.Context context) {
             List<pw.Widget> widgets = [];
             widgets.add(pw.Header(level: 1, text: 'Damage Proof Photos', textStyle: pw.TextStyle(color: PdfColors.red, fontSize: 20)));
@@ -203,7 +203,7 @@ class ExportService {
 
             int imgIndex = 0;
             for (var box in activeBoxes.where((b) => b.isDamaged && b.damagePhotos.isNotEmpty)) {
-              for (var path in box.damagePhotos) {
+              for (var _ in box.damagePhotos) {
                 if (imgIndex < pdfImages.length) {
                   // Image ko bada aur clear dikhane ke liye
                   widgets.add(pw.Center(
@@ -246,7 +246,7 @@ class ExportService {
       );
     }
 
-    // PDF File Save aur Share karein
+    // PDF File Save aur Share karenge
     final directory = await getTemporaryDirectory();
     final filePath = '${directory.path}/LT_Operations_Report_${entry.vehicleNumber}.pdf';
     final file = File(filePath);

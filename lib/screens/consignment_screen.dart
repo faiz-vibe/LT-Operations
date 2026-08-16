@@ -775,9 +775,9 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: const [
+                    children: [
                       Text('LT Operations', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                       Icon(Icons.local_shipping, color: Colors.white, size: 30),
                     ],
@@ -847,8 +847,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                     decoration: BoxDecoration(color: Colors.grey[200], borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
-                    child: Row(
-                      children: const [
+                    child: const Row(
+                      children: [
                         Expanded(flex: 3, child: Text('Consignment', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                         Expanded(flex: 2, child: Text('Company', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                         Expanded(flex: 2, child: Text('Route', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
@@ -897,7 +897,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         ],
                       ),
                     );
-                  }).toList(),
+                  }),
 
                   if (hasDamagePhotos) ...[
                     const SizedBox(height: 20),
@@ -924,7 +924,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           const SizedBox(height: 10),
                         ],
                       );
-                    }).toList(),
+                    }),
                   ],
 
                   const SizedBox(height: 30),

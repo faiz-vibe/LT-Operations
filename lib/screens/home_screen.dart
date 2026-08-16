@@ -1,5 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
+import 'package:flutter/material.dart' show Align, Alignment, AppBar, BorderRadius, BorderSide, BoxDecoration, BoxShape, BuildContext, Card, Center, Colors, Column, Container, CrossAxisAlignment, DismissDirection, Dismissible, Divider, Drawer, DrawerHeader, EdgeInsets, Expanded, FloatingActionButton, FocusManager, FocusNode, FontStyle, FontWeight, GestureDetector, GlobalKey, HitTestBehavior, Icon, IconButton, Icons, InputDecoration, Key, ListTile, ListView, MainAxisAlignment, MaterialPageRoute, Navigator, OutlineInputBorder, Padding, RoundedRectangleBorder, Row, Scaffold, ScaffoldMessenger, ScaffoldState, SizedBox, SnackBar, State, StatefulWidget, Text, TextAlign, TextEditingController, TextField, TextStyle, ValueListenableBuilder, Widget;
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/vehicle_entry.dart';
 import 'vehicle_entry_screen.dart';
@@ -108,10 +107,10 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 DrawerHeader(
                   decoration: BoxDecoration(color: Colors.blue[800]),
-                  child: Column(
+                  child: const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.end,
-                    children: const [
+                    children: [
                       Icon(Icons.local_shipping, color: Colors.white, size: 40),
                       SizedBox(height: 10),
                       Text('Transport App', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
