@@ -60,6 +60,7 @@ dependencies:
   pdf: ^3.10.4
   # 7. Date aur Time format karne ke liye
   intl: ^0.18.1
+  http: ^1.1.0
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

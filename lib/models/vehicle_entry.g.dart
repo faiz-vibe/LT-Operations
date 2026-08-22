@@ -28,13 +28,15 @@ class VehicleEntryAdapter extends TypeAdapter<VehicleEntry> {
       isDeleted: fields[8] as bool,
       gateNumber: fields[9] as String,
       lastEditedAt: fields[10] as DateTime?,
+      startPhotos: (fields[11] as List).cast<String>(),
+      endPhotos: (fields[12] as List).cast<String>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, VehicleEntry obj) {
     writer
-      ..writeByte(11)
+      ..writeByte(13)
       ..writeByte(0)
       ..write(obj.vehicleNumber)
       ..writeByte(1)
@@ -56,7 +58,11 @@ class VehicleEntryAdapter extends TypeAdapter<VehicleEntry> {
       ..writeByte(9)
       ..write(obj.gateNumber)
       ..writeByte(10)
-      ..write(obj.lastEditedAt);
+      ..write(obj.lastEditedAt)
+      ..writeByte(11)
+      ..write(obj.startPhotos)
+      ..writeByte(12)
+      ..write(obj.endPhotos);
   }
 
   @override

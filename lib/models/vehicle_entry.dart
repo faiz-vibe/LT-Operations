@@ -38,6 +38,12 @@ class VehicleEntry extends HiveObject {
   @HiveField(10)
   DateTime? lastEditedAt;
 
+  @HiveField(11) // Naya field
+  List<String> startPhotos;
+
+  @HiveField(12) // Naya field
+  List<String> endPhotos;
+
   VehicleEntry({
     required this.vehicleNumber,
     required this.driverName,
@@ -50,6 +56,8 @@ class VehicleEntry extends HiveObject {
     this.isDeleted = false,
     this.gateNumber = 'Gate 1',
     this.lastEditedAt,
+    this.startPhotos = const [],
+    this.endPhotos = const [],
   });
 
   int get totalReceivedBoxes => boxes.where((b) => !b.isDeleted).fold(0, (sum, item) => sum + item.receivedBoxes);
@@ -66,6 +74,8 @@ class VehicleEntry extends HiveObject {
     'isDeleted': isDeleted,
     'gateNumber': gateNumber,
     'lastEditedAt': lastEditedAt?.toIso8601String(),
+    'startPhotos': startPhotos,
+    'endPhotos': endPhotos,
   };
 
   factory VehicleEntry.fromJson(Map<String, dynamic> json) {
@@ -80,6 +90,8 @@ class VehicleEntry extends HiveObject {
       isDeleted: json['isDeleted'] as bool,
       gateNumber: json['gateNumber'] as String,
       lastEditedAt: json['lastEditedAt'] != null ? DateTime.parse(json['lastEditedAt'] as String) : null,
+      startPhotos: List<String>.from(json['startPhotos'] as List? ?? []),
+      endPhotos: List<String>.from(json['endPhotos'] as List? ?? []),
     );
   }
 }

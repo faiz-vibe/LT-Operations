@@ -46,13 +46,12 @@ class ExportService {
     final excel = Excel.createExcel();
     final sheet = excel['Transport Report'];
 
-    // Headers (Wrapped in TextCellValue)
     sheet.appendRow([TextCellValue('Vehicle Number'), TextCellValue(entry.vehicleNumber)]);
     sheet.appendRow([TextCellValue('Driver Name'), TextCellValue(entry.driverName)]);
     sheet.appendRow([TextCellValue('Driver Mobile'), TextCellValue(entry.driverMobile)]);
     sheet.appendRow([TextCellValue('Status'), TextCellValue('${entry.vehicleStatus} | ${entry.gateNumber}')]);
     sheet.appendRow([TextCellValue('Date'), TextCellValue('${entry.entryDate.day}/${entry.entryDate.month}/${entry.entryDate.year}')]);
-    sheet.appendRow([]); // Empty row
+    sheet.appendRow([]);
 
     sheet.appendRow([
       TextCellValue('Consignment No'),
@@ -80,13 +79,11 @@ class ExportService {
     sheet.appendRow([TextCellValue('Total Boxes'), IntCellValue(entry.totalReceivedBoxes)]);
     sheet.appendRow([TextCellValue('Total Shortage'), IntCellValue(entry.totalShortage)]);
 
-    // File save karenge
     final directory = await getTemporaryDirectory();
     final filePath = '${directory.path}/Transport_Report_${entry.vehicleNumber}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
     final file = File(filePath);
     await file.writeAsBytes(excel.save()!);
 
-    // Share karenge
     await Share.shareXFiles([XFile(filePath)], text: 'Transport Excel Report - ${entry.vehicleNumber}');
   }
 
@@ -95,7 +92,20 @@ class ExportService {
     await Share.shareXFiles([XFile(imageFile.path)], text: 'Transport Slip - $vehicleNumber');
   }
 
-  // 4. PDF Export (Modern & High Quality)
+  // Helper: Images load karne ke liye
+  static Future<List<pw.MemoryImage>> _loadImages(List<String> paths) async {
+    List<pw.MemoryImage> images = [];
+    for (var path in paths) {
+      final file = File(path);
+      if (await file.exists()) {
+        final bytes = await file.readAsBytes();
+        images.add(pw.MemoryImage(bytes));
+      }
+    }
+    return images;
+  }
+
+  // 4. PDF Export (Modern & High Quality with All Photos)
   static Future<void> exportToPdf(VehicleEntry entry) async {
     final pdf = pw.Document();
     final activeBoxes = entry.boxes.where((b) => !b.isDeleted && b.consignmentNo.isNotEmpty).toList();
@@ -107,7 +117,6 @@ class ExportService {
         margin: pw.EdgeInsets.all(20),
         build: (pw.Context context) {
           return [
-            // Header
             pw.Container(
                 width: double.infinity,
                 color: PdfColors.blue800,
@@ -123,7 +132,6 @@ class ExportService {
                 )
             ),
             pw.SizedBox(height: 20),
-            // Vehicle Info
             pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
@@ -147,7 +155,6 @@ class ExportService {
                 ]
             ),
             pw.SizedBox(height: 20),
-            // Table (TableHelper use kiya hai)
             pw.TableHelper.fromTextArray(
               context: context,
               data: <List<String>>[
@@ -176,22 +183,62 @@ class ExportService {
       ),
     );
 
-    // Page 2: Damage Photos (High Quality, No Compression)
+    // Page 2: Start Photos (Seal, Gate Open, Empty Vehicle)
+    if (entry.startPhotos.isNotEmpty) {
+      final startImages = await _loadImages(entry.startPhotos);
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: pw.EdgeInsets.all(20),
+          build: (pw.Context context) {
+            List<pw.Widget> widgets = [];
+            widgets.add(pw.Header(level: 1, text: 'Start Photos', textStyle: pw.TextStyle(color: PdfColors.blue800, fontSize: 20)));
+            widgets.add(pw.SizedBox(height: 10));
+
+            for (var img in startImages) {
+              widgets.add(pw.Center(
+                  child: pw.Image(img, width: 400, height: 350, fit: pw.BoxFit.contain)
+              ));
+              widgets.add(pw.SizedBox(height: 20));
+            }
+            return widgets;
+          },
+        ),
+      );
+    }
+
+    // Page 3: End Photos (Empty Vehicle, Seal, Meter)
+    if (entry.endPhotos.isNotEmpty) {
+      final endImages = await _loadImages(entry.endPhotos);
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: pw.EdgeInsets.all(20),
+          build: (pw.Context context) {
+            List<pw.Widget> widgets = [];
+            widgets.add(pw.Header(level: 1, text: 'End Photos', textStyle: pw.TextStyle(color: PdfColors.green800, fontSize: 20)));
+            widgets.add(pw.SizedBox(height: 10));
+
+            for (var img in endImages) {
+              widgets.add(pw.Center(
+                  child: pw.Image(img, width: 400, height: 350, fit: pw.BoxFit.contain)
+              ));
+              widgets.add(pw.SizedBox(height: 20));
+            }
+            return widgets;
+          },
+        ),
+      );
+    }
+
+    // Page 4: Damage Photos (High Quality, No Compression)
     bool hasDamagePhotos = activeBoxes.any((b) => b.isDamaged && b.damagePhotos.isNotEmpty);
     if (hasDamagePhotos) {
-      // Pehle saari images ko memory me load karenge (High Quality)
-      List<pw.MemoryImage> pdfImages = [];
+      Map<String, List<pw.MemoryImage>> boxDamageImages = {};
       for (var box in activeBoxes.where((b) => b.isDamaged && b.damagePhotos.isNotEmpty)) {
-        for (var _ in box.damagePhotos) {
-          final imageFile = File(box.damagePhotos[0]); // fixed unused variable issue
-          if (await imageFile.exists()) {
-            final bytes = await imageFile.readAsBytes();
-            pdfImages.add(pw.MemoryImage(bytes));
-          }
-        }
+        boxDamageImages[box.consignmentNo] = await _loadImages(box.damagePhotos);
       }
 
-      // Photos ke liye naya page banayenge
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
@@ -201,21 +248,21 @@ class ExportService {
             widgets.add(pw.Header(level: 1, text: 'Damage Proof Photos', textStyle: pw.TextStyle(color: PdfColors.red, fontSize: 20)));
             widgets.add(pw.SizedBox(height: 10));
 
-            int imgIndex = 0;
             for (var box in activeBoxes.where((b) => b.isDamaged && b.damagePhotos.isNotEmpty)) {
+              final damageImages = boxDamageImages[box.consignmentNo] ?? [];
+              int imgIndex = 0;
+
               for (var _ in box.damagePhotos) {
-                if (imgIndex < pdfImages.length) {
-                  // Image ko bada aur clear dikhane ke liye
+                if (imgIndex < damageImages.length) {
                   widgets.add(pw.Center(
                       child: pw.Image(
-                        pdfImages[imgIndex],
+                        damageImages[imgIndex],
                         width: 400,
                         height: 350,
                         fit: pw.BoxFit.contain,
                       )
                   ));
 
-                  // Consignment Number image ke just niche (Center me)
                   widgets.add(pw.SizedBox(height: 5));
                   widgets.add(pw.Center(
                       child: pw.Text(
@@ -224,7 +271,6 @@ class ExportService {
                       )
                   ));
 
-                  // Damage Details bhi consignment number ke niche (Center me)
                   if (box.damageDetails.isNotEmpty) {
                     widgets.add(pw.Center(
                         child: pw.Text(
@@ -234,7 +280,7 @@ class ExportService {
                     ));
                   }
 
-                  widgets.add(pw.SizedBox(height: 20)); // Agale image se space ke liye
+                  widgets.add(pw.SizedBox(height: 20));
                   imgIndex++;
                 }
               }

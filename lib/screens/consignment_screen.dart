@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:screenshot/screenshot.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
-
+import '../services/google_sync_service.dart';
 import '../models/vehicle_entry.dart';
 import '../models/box_item.dart';
 import '../services/export_service.dart';
@@ -106,7 +106,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       dBox.put(_editingBox!.damageDetails, _editingBox!.damageDetails);
     }
 
-    // Naya: Locations ko sirf update/save dabane par dictionary me save karein
     final locBox = Hive.box<String>('locations');
     if (_editingBox!.sourceLocation.isNotEmpty && !locBox.containsKey(_editingBox!.sourceLocation)) {
       locBox.put(_editingBox!.sourceLocation, _editingBox!.sourceLocation);
@@ -146,7 +145,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
         companyName: 'Unknown',
         expectedBoxes: 0,
         receivedBoxes: 0,
-        isDamaged: false,
+        isDamaged: false, // Yahan typo fix kar diya hai
         createdAt: DateTime.now(),
       );
       widget.vehicleEntry.boxes.add(_editingBox!);
@@ -267,7 +266,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Naya: Location (Source To Destination) with Autocomplete
+                    // Location (Source To Destination)
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -567,6 +566,193 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     });
   }
 
+  // Naya: Complete Process Popup (End Photos)
+  Future<void> _showCompleteProcessPopup() async {
+    _boxSearchFocusNode.unfocus();
+
+    int requiredEndPhotos = widget.vehicleEntry.vehicleStatus == 'Unloading' ? 1 : 2;
+    bool skippedEndPhotos = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            bool canComplete = widget.vehicleEntry.endPhotos.length >= requiredEndPhotos || skippedEndPhotos;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 16,
+                right: 16,
+                top: 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Complete Process', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  Text(
+                    widget.vehicleEntry.vehicleStatus == 'Unloading'
+                        ? '1. Empty Vehicle Photo'
+                        : '1. Sealed Vehicle Photo\n2. Meter/KM Reading Photo',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                  ),
+                  const SizedBox(height: 15),
+
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.camera_alt, color: Colors.white),
+                    label: Text(
+                      widget.vehicleEntry.endPhotos.isEmpty ? 'Take End Photos' : 'Add More Photo',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
+                    onPressed: () async {
+                      final ImagePicker picker = ImagePicker();
+                      final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+                      if (photo != null) {
+                        setModalState(() {
+                          widget.vehicleEntry.endPhotos.add(photo.path);
+                          widget.vehicleEntry.save();
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
+
+                  if (widget.vehicleEntry.endPhotos.isNotEmpty)
+                    SizedBox(
+                      height: 90,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: widget.vehicleEntry.endPhotos.length,
+                        itemBuilder: (context, index) {
+                          return Stack(
+                            children: [
+                              Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                child: Image.file(
+                                  File(widget.vehicleEntry.endPhotos[index]),
+                                  width: 80,
+                                  height: 80,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setModalState(() {
+                                      widget.vehicleEntry.endPhotos.removeAt(index);
+                                      widget.vehicleEntry.save();
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                    child: const Icon(Icons.close, size: 14, color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+
+                  const SizedBox(height: 20),
+                  if (!canComplete)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () {
+                          setModalState(() {
+                            skippedEndPhotos = true;
+                          });
+                        },
+                        child: const Text('Skip', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: canComplete ? Colors.green[800] : Colors.grey,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: canComplete ? () async {
+                        // 1. Loading Dialog dikhayein
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (BuildContext context) {
+                            return const AlertDialog(
+                              content: Row(
+                                children: [
+                                  CircularProgressIndicator(),
+                                  SizedBox(width: 20),
+                                  Text("Syncing to Google..."),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+
+                        // 2. Google Sheet me data bhejein
+                        bool isSynced = await GoogleSyncService.syncToSheet(widget.vehicleEntry);
+
+                        // 3. Loading Dialog band karein
+                        if (context.mounted) Navigator.pop(context);
+
+                        // 4. Entry ko Complete mark karein
+                        widget.vehicleEntry.isCompleted = true;
+                        widget.vehicleEntry.save();
+                        final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
+                        hiveBox.flush();
+
+                        // 5. Success/Failure message dikhayein
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(isSynced
+                                  ? 'Process Complete & Synced to Google Sheet!'
+                                  : 'Saved locally. Sync failed (No internet).'),
+                              backgroundColor: isSynced ? Colors.green : Colors.orange,
+                            ),
+                          );
+                        }
+
+                        // 6. Wapas Home screen par jayein
+                        if (context.mounted) {
+                          Navigator.pop(context); // Popup band
+                          Navigator.pop(context); // Consignment screen se wapas Home par
+                        }
+                      } : null,
+                      child: const Text('Submit & Complete', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  if (!canComplete)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0, bottom: 10),
+                      child: Text(
+                        'Complete button lock hai. Pehle End Photos khinchye ya Skip dabayein.',
+                        style: TextStyle(fontSize: 12, color: Colors.red[700]),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _showTrashForThisVehicle() {
     _boxSearchFocusNode.unfocus();
 
@@ -775,9 +961,9 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
+                    children: const [
                       Text('LT Operations', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                       Icon(Icons.local_shipping, color: Colors.white, size: 30),
                     ],
@@ -847,8 +1033,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                     decoration: BoxDecoration(color: Colors.grey[200], borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
-                    child: const Row(
-                      children: [
+                    child: Row(
+                      children: const [
                         Expanded(flex: 3, child: Text('Consignment', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                         Expanded(flex: 2, child: Text('Company', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                         Expanded(flex: 2, child: Text('Route', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
@@ -897,7 +1083,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         ],
                       ),
                     );
-                  }),
+                  }).toList(),
 
                   if (hasDamagePhotos) ...[
                     const SizedBox(height: 20),
@@ -924,7 +1110,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           const SizedBox(height: 10),
                         ],
                       );
-                    }),
+                    }).toList(),
                   ],
 
                   const SizedBox(height: 30),
@@ -994,6 +1180,23 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
         backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
         actions: [
+          // Naya: Complete Process Button (Green Tick)
+          if (!entry.isCompleted)
+            TextButton.icon(
+              icon: const Icon(Icons.check_circle, color: Colors.white),
+              label: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              onPressed: _showCompleteProcessPopup,
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.check_circle, color: Colors.green),
+              tooltip: 'Process Completed',
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('This vehicle process is already completed.')),
+                );
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Deleted Boxes',

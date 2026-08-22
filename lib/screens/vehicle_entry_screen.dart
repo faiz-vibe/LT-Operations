@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import '../models/vehicle_entry.dart';
 import 'consignment_screen.dart';
 
@@ -15,6 +17,7 @@ class VehicleEntryScreen extends StatefulWidget {
 class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
   late VehicleEntry _currentEntry;
   bool _isNewEntry = false;
+  bool _skippedStartPhotos = false; // Skip track karne ke liye
 
   @override
   void initState() {
@@ -41,17 +44,15 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
 
   @override
   void dispose() {
-    // Agar naye entry me kuch bhi type nahi hua hai, toh use delete kar do
+    // Drafts Removal Logic: Agar naye entry me kuch type nahi hua, toh direct delete karo
     if (_isNewEntry) {
-      // Check karein ki kisi bhi field me ek bhi alphabet ya number to nahi hai
       bool isEmpty = _currentEntry.vehicleNumber.trim().isEmpty &&
           _currentEntry.driverName.trim().isEmpty &&
           _currentEntry.driverMobile.trim().isEmpty &&
           _currentEntry.boxes.where((b) => !b.isDeleted && b.consignmentNo.isNotEmpty).isEmpty;
 
       if (isEmpty) {
-        // Agar poori entry khaali hai, toh Trash me bhejne ke bajaye direct DB se delete kar do
-        _currentEntry.delete();
+        _currentEntry.delete(); // Trash me nahi bhejenge, direct delete
       }
     }
     super.dispose();
@@ -61,6 +62,18 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
     if (_currentEntry.vehicleNumber.isEmpty || _currentEntry.driverName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Kripya Vehicle No aur Driver Name dalein!')),
+      );
+      return;
+    }
+
+    // Validation: Start Photos ya toh hone chahiye ya Skip kiya hua ho
+    int requiredStartPhotos = _currentEntry.vehicleStatus == 'Unloading' ? 2 : 1;
+    if (_currentEntry.startPhotos.length < requiredStartPhotos && !_skippedStartPhotos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Pehle Start Photos khinchye ya Skip dabayein! (Required: $requiredStartPhotos)'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -76,7 +89,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
       dBox.put(_currentEntry.driverName, _currentEntry.driverName);
     }
 
-    // Naya: Driver Mobile Number ko save karein
     final mBox = Hive.box<String>('driver_mobiles');
     if (_currentEntry.driverMobile.isNotEmpty && !mBox.containsKey(_currentEntry.driverMobile)) {
       mBox.put(_currentEntry.driverMobile, _currentEntry.driverMobile);
@@ -94,8 +106,24 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
     }
   }
 
+  Future<void> _takeStartPhoto() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+
+    if (photo != null) {
+      setState(() {
+        _currentEntry.startPhotos.add(photo.path);
+        _currentEntry.save();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    int requiredStartPhotos = _currentEntry.vehicleStatus == 'Unloading' ? 2 : 1;
+    bool hasStartPhotos = _currentEntry.startPhotos.length >= requiredStartPhotos;
+    bool canProceed = hasStartPhotos || _skippedStartPhotos;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vehicle & Driver Details', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -113,7 +141,7 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Vehicle Number (Auto-complete)
+            // Vehicle Number
             Autocomplete<String>(
               initialValue: TextEditingValue(text: _currentEntry.vehicleNumber),
               fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
@@ -146,7 +174,7 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Driver Name (Auto-complete)
+            // Driver Name
             Autocomplete<String>(
               initialValue: TextEditingValue(text: _currentEntry.driverName),
               fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
@@ -178,7 +206,7 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Driver Mobile (Auto-complete)
+            // Driver Mobile
             Autocomplete<String>(
               initialValue: TextEditingValue(text: _currentEntry.driverMobile),
               fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
@@ -225,13 +253,16 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
               onChanged: (val) {
                 setState(() {
                   _currentEntry.vehicleStatus = val!;
+                  // Status change hone par photos reset karein
+                  _currentEntry.startPhotos.clear();
+                  _skippedStartPhotos = false;
                   _currentEntry.save();
                 });
               },
             ),
             const SizedBox(height: 16),
 
-            // Gate Number Dropdown (1 to 4)
+            // Gate Number Dropdown
             DropdownButtonFormField<String>(
               value: _currentEntry.gateNumber,
               decoration: const InputDecoration(
@@ -252,6 +283,109 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
                 });
               },
             ),
+            const SizedBox(height: 20),
+
+            // --- Naya: Start Photos Section ---
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: canProceed ? Colors.green : Colors.red, width: 1.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Start Photos (Zaruri)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      if (!canProceed)
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _skippedStartPhotos = true;
+                            });
+                          },
+                          child: const Text('Skip', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                        ),
+                      if (canProceed)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 8.0),
+                          child: Icon(Icons.check_circle, color: Colors.green),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _currentEntry.vehicleStatus == 'Unloading'
+                        ? '1. Seal Photo\n2. Gate Open Photo'
+                        : '1. Empty Vehicle Photo',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                  ),
+                  const SizedBox(height: 10),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.camera_alt, color: Colors.white),
+                          label: Text(
+                            _currentEntry.startPhotos.isEmpty ? 'Take Photo' : 'Add More',
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800]),
+                          onPressed: _takeStartPhoto,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  if (_currentEntry.startPhotos.isNotEmpty)
+                    SizedBox(
+                      height: 90,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _currentEntry.startPhotos.length,
+                        itemBuilder: (context, index) {
+                          return Stack(
+                            children: [
+                              Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                child: Image.file(
+                                  File(_currentEntry.startPhotos[index]),
+                                  width: 80,
+                                  height: 80,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _currentEntry.startPhotos.removeAt(index);
+                                      _currentEntry.save();
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                    child: const Icon(Icons.close, size: 14, color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
             const SizedBox(height: 30),
 
             // Next / Update Button
@@ -260,17 +394,26 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
               height: 50,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[800],
+                  backgroundColor: canProceed ? Colors.blue[800] : Colors.grey,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                onPressed: _proceedOrSave,
+                onPressed: canProceed ? _proceedOrSave : null,
                 child: Text(
                     widget.existingEntry == null ? 'Next: Scan Boxes' : 'Update Details',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
                 ),
               ),
             ),
+            if (!canProceed)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  'Next button lock hai. Pehle Photos khinchye ya Skip dabayein.',
+                  style: TextStyle(fontSize: 12, color: Colors.red[700]),
+                  textAlign: TextAlign.center,
+                ),
+              ),
           ],
         ),
       ),
