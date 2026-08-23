@@ -88,7 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         final trashCount = box.values.where((e) => e.isDeleted).length;
 
-        // Check karein ki koi incomplete entry (draft) hai ya nahi
+        // Check karein ki koi incomplete entry (draft) hai ya nahi (ignore it is just for commit)
         final draftEntry = box.values.cast<VehicleEntry?>().firstWhere(
               (entry) => entry != null && !entry.isCompleted && !entry.isDeleted,
           orElse: () => null,
