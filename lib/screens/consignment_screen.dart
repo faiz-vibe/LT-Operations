@@ -72,7 +72,10 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     _editingBox!.damagedCount = _isDamaged ? (int.tryParse(_damagedCountController.text) ?? 0) : 0;
     _editingBox!.damageDetails = _isDamaged ? _damageDetailsController.text : '';
     _editingBox!.transportMode = _selectedMode;
-    _editingBox!.damagePhotos = _damagePhotos;
+
+    // Fixed: List replace logic for damage photos
+    _editingBox!.damagePhotos = List<String>.from(_damagePhotos);
+
     _editingBox!.sourceLocation = _sourceLocationController.text;
     _editingBox!.destinationLocation = _destinationLocationController.text;
     _editingBox!.lastEditedAt = DateTime.now();
@@ -134,7 +137,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       _damagedCountController.text = boxToEdit.damagedCount.toString();
       _damageDetailsController.text = boxToEdit.damageDetails;
       _selectedMode = boxToEdit.transportMode;
-      _damagePhotos = List.from(boxToEdit.damagePhotos);
+      _damagePhotos = List<String>.from(boxToEdit.damagePhotos); // Fixed
       _sourceLocationController.text = boxToEdit.sourceLocation;
       _destinationLocationController.text = boxToEdit.destinationLocation;
       _damageCountError = false;
@@ -145,8 +148,9 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
         companyName: 'Unknown',
         expectedBoxes: 0,
         receivedBoxes: 0,
-        isDamaged: false, // Yahan typo fix kar diya hai
+        isDamaged: false,
         createdAt: DateTime.now(),
+        damagePhotos: [], // Fixed
       );
       widget.vehicleEntry.boxes.add(_editingBox!);
       _editingIndex = widget.vehicleEntry.boxes.length - 1;
@@ -162,7 +166,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       _destinationLocationController.clear();
       _isDamaged = false;
       _selectedMode = 'Surface';
-      _damagePhotos.clear();
+      _damagePhotos = [];
       _damageCountError = false;
     }
 
@@ -235,14 +239,14 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     Autocomplete<String>(
                       initialValue: TextEditingValue(text: _companyController.text),
                       fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                        controller.addListener(() {
-                          _companyController.text = controller.text;
-                          _forceSave();
-                        });
                         return TextField(
                           controller: controller,
                           focusNode: focusNode,
                           onEditingComplete: onEditingComplete,
+                          onChanged: (val) {
+                            _companyController.text = val;
+                            _forceSave();
+                          },
                           decoration: const InputDecoration(
                             labelText: 'Company Name',
                             border: OutlineInputBorder(),
@@ -274,15 +278,15 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           child: Autocomplete<String>(
                             initialValue: TextEditingValue(text: _sourceLocationController.text),
                             fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                              controller.addListener(() {
-                                _sourceLocationController.text = controller.text;
-                                _forceSave();
-                              });
                               return TextField(
                                 controller: controller,
                                 focusNode: focusNode,
                                 onEditingComplete: onEditingComplete,
                                 textCapitalization: TextCapitalization.words,
+                                onChanged: (val) {
+                                  _sourceLocationController.text = val;
+                                  _forceSave();
+                                },
                                 decoration: const InputDecoration(
                                   labelText: 'From (Source)',
                                   border: OutlineInputBorder(),
@@ -313,15 +317,15 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           child: Autocomplete<String>(
                             initialValue: TextEditingValue(text: _destinationLocationController.text),
                             fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                              controller.addListener(() {
-                                _destinationLocationController.text = controller.text;
-                                _forceSave();
-                              });
                               return TextField(
                                 controller: controller,
                                 focusNode: focusNode,
                                 onEditingComplete: onEditingComplete,
                                 textCapitalization: TextCapitalization.words,
+                                onChanged: (val) {
+                                  _destinationLocationController.text = val;
+                                  _forceSave();
+                                },
                                 decoration: const InputDecoration(
                                   labelText: 'To (Dest)',
                                   border: OutlineInputBorder(),
@@ -406,15 +410,15 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       Autocomplete<String>(
                         initialValue: TextEditingValue(text: _damageDetailsController.text),
                         fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                          controller.addListener(() {
-                            _damageDetailsController.text = controller.text;
-                            _forceSave();
-                          });
                           return TextField(
                             controller: controller,
                             focusNode: focusNode,
                             onEditingComplete: onEditingComplete,
                             maxLines: 2,
+                            onChanged: (val) {
+                              _damageDetailsController.text = val;
+                              _forceSave();
+                            },
                             decoration: const InputDecoration(
                                 labelText: 'Damage Details',
                                 border: OutlineInputBorder(),
@@ -461,7 +465,10 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 50);
                           if (photo != null) {
                             setModalState(() {
-                              _damagePhotos.add(photo.path);
+                              // FIXED: List replace logic
+                              final List<String> updatedPhotos = List<String>.from(_damagePhotos);
+                              updatedPhotos.add(photo.path);
+                              _damagePhotos = updatedPhotos;
                             });
                             _forceSave();
                           }
@@ -492,7 +499,10 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                                     child: GestureDetector(
                                       onTap: () {
                                         setModalState(() {
-                                          _damagePhotos.removeAt(index);
+                                          // FIXED: List replace logic
+                                          final List<String> updatedPhotos = List<String>.from(_damagePhotos);
+                                          updatedPhotos.removeAt(index);
+                                          _damagePhotos = updatedPhotos;
                                         });
                                         _forceSave();
                                       },
@@ -614,7 +624,10 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
                       if (photo != null) {
                         setModalState(() {
-                          widget.vehicleEntry.endPhotos.add(photo.path);
+                          // FIXED: List replace logic
+                          final List<String> updatedPhotos = List<String>.from(widget.vehicleEntry.endPhotos);
+                          updatedPhotos.add(photo.path);
+                          widget.vehicleEntry.endPhotos = updatedPhotos;
                           widget.vehicleEntry.save();
                         });
                       }
@@ -646,7 +659,10 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                                 child: GestureDetector(
                                   onTap: () {
                                     setModalState(() {
-                                      widget.vehicleEntry.endPhotos.removeAt(index);
+                                      // FIXED: List replace logic
+                                      final List<String> updatedPhotos = List<String>.from(widget.vehicleEntry.endPhotos);
+                                      updatedPhotos.removeAt(index);
+                                      widget.vehicleEntry.endPhotos = updatedPhotos;
                                       widget.vehicleEntry.save();
                                     });
                                   },
@@ -685,7 +701,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         foregroundColor: Colors.white,
                       ),
                       onPressed: canComplete ? () async {
-                        // 1. Loading Dialog dikhayein
                         showDialog(
                           context: context,
                           barrierDismissible: false,
@@ -702,19 +717,15 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           },
                         );
 
-                        // 2. Google Sheet me data bhejein
                         bool isSynced = await GoogleSyncService.syncToSheet(widget.vehicleEntry);
 
-                        // 3. Loading Dialog band karein
                         if (context.mounted) Navigator.pop(context);
 
-                        // 4. Entry ko Complete mark karein
                         widget.vehicleEntry.isCompleted = true;
                         widget.vehicleEntry.save();
                         final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
                         hiveBox.flush();
 
-                        // 5. Success/Failure message dikhayein
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -726,10 +737,9 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           );
                         }
 
-                        // 6. Wapas Home screen par jayein
                         if (context.mounted) {
-                          Navigator.pop(context); // Popup band
-                          Navigator.pop(context); // Consignment screen se wapas Home par
+                          Navigator.pop(context);
+                          Navigator.pop(context);
                         }
                       } : null,
                       child: const Text('Submit & Complete', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -1180,7 +1190,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
         backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
         actions: [
-          // Naya: Complete Process Button (Green Tick)
           if (!entry.isCompleted)
             TextButton.icon(
               icon: const Icon(Icons.check_circle, color: Colors.white),
