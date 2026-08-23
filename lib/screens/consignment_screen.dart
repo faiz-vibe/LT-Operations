@@ -973,9 +973,26 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: const [
-                      Text('LT Operations', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                      Icon(Icons.local_shipping, color: Colors.white, size: 30),
+                    children: [
+                      Text('Total Boxes: ${entry.totalReceivedBoxes}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Flexible(
+                        child: Text(
+                              () {
+                            String status = '';
+                            if (entry.totalShortage > 0) status += 'Short: ${entry.totalShortage}  ';
+                            if (entry.totalExtra > 0) status += 'Extra: ${entry.totalExtra}  ';
+                            if (entry.totalDamaged > 0) status += 'Damaged: ${entry.totalDamaged}';
+                            if (status.isEmpty) status = 'All Perfect';
+                            return status.trim();
+                          }(),
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: (entry.totalShortage > 0 || entry.totalDamaged > 0) ? Colors.red : (entry.totalExtra > 0 ? Colors.blue : Colors.green)
+                          ),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
                     ],
                   ),
                   const Text('Transport Supervisor Report', style: TextStyle(color: Colors.white70, fontSize: 14)),
@@ -1258,12 +1275,24 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('Total Boxes: ${entry.totalReceivedBoxes}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      if (entry.totalShortage > 0)
-                        Text('Shortage: ${entry.totalShortage}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red))
-                      else if (entry.totalShortage < 0)
-                        Text('Extra: ${-entry.totalShortage}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue))
-                      else
-                        const Text('All Perfect', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green)),
+                      Flexible(
+                        child: Text(
+                              () {
+                            String status = '';
+                            if (entry.totalShortage > 0) status += 'Short: ${entry.totalShortage}  ';
+                            if (entry.totalExtra > 0) status += 'Extra: ${entry.totalExtra}  ';
+                            if (entry.totalDamaged > 0) status += 'Damaged: ${entry.totalDamaged}';
+                            if (status.isEmpty) status = 'All Perfect';
+                            return status.trim();
+                          }(),
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: (entry.totalShortage > 0 || entry.totalDamaged > 0) ? Colors.red : (entry.totalExtra > 0 ? Colors.blue : Colors.green)
+                          ),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 4),

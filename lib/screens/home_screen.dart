@@ -329,8 +329,23 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Total Boxes: ${entry.totalReceivedBoxes} | Shortage: ${entry.totalShortage}',
-                                  style: TextStyle(color: entry.totalShortage > 0 ? Colors.red : Colors.green, fontWeight: FontWeight.w500),
+                                  'Total Boxes: ${entry.totalReceivedBoxes}',
+                                  style: const TextStyle(fontWeight: FontWeight.w500),
+                                ),
+                                // Naya: Smart Status Display
+                                Text(
+                                      () {
+                                    String status = '';
+                                    if (entry.totalShortage > 0) status += 'Short: ${entry.totalShortage}  ';
+                                    if (entry.totalExtra > 0) status += 'Extra: ${entry.totalExtra}  ';
+                                    if (entry.totalDamaged > 0) status += 'Damaged: ${entry.totalDamaged}';
+                                    if (status.isEmpty) status = 'All Perfect';
+                                    return status.trim();
+                                  }(),
+                                  style: TextStyle(
+                                      color: (entry.totalShortage > 0 || entry.totalDamaged > 0) ? Colors.red : (entry.totalExtra > 0 ? Colors.blue : Colors.green),
+                                      fontWeight: FontWeight.w500
+                                  ),
                                 ),
                                 Text(
                                   'Created: ${entry.entryDate.day}/${entry.entryDate.month}/${entry.entryDate.year}  ${entry.entryDate.hour.toString().padLeft(2, '0')}:${entry.entryDate.minute.toString().padLeft(2, '0')}',

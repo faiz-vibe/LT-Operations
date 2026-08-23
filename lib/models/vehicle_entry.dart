@@ -61,7 +61,11 @@ class VehicleEntry extends HiveObject {
   });
 
   int get totalReceivedBoxes => boxes.where((b) => !b.isDeleted).fold(0, (sum, item) => sum + item.receivedBoxes);
-  int get totalShortage => boxes.where((b) => !b.isDeleted).fold(0, (sum, item) => sum + item.shortage);
+
+  // Naya Logic: Shortage aur Extra alag alag calculate honge
+  int get totalShortage => boxes.where((b) => !b.isDeleted).fold(0, (sum, item) => sum + (item.shortage > 0 ? item.shortage : 0));
+  int get totalExtra => boxes.where((b) => !b.isDeleted).fold(0, (sum, item) => sum + (item.shortage < 0 ? -item.shortage : 0));
+  int get totalDamaged => boxes.where((b) => !b.isDeleted).fold(0, (sum, item) => sum + item.damagedCount);
 
   Map<String, dynamic> toJson() => {
     'vehicleNumber': vehicleNumber,

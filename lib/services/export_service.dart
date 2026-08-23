@@ -132,28 +132,71 @@ class ExportService {
                 )
             ),
             pw.SizedBox(height: 20),
-            pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(entry.vehicleNumber, style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
-                        pw.SizedBox(height: 4),
-                        pw.Text('Driver: ${entry.driverName}', style: pw.TextStyle(fontSize: 14, color: PdfColors.black)),
-                        pw.Text('Mobile: ${entry.driverMobile}', style: pw.TextStyle(fontSize: 12, color: PdfColors.grey)),
-                      ]
-                  ),
-                  pw.Container(
-                      padding: pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: pw.BoxDecoration(
-                        color: entry.vehicleStatus == 'Loading' ? PdfColors.blue100 : PdfColors.orange100,
-                        borderRadius: pw.BorderRadius.circular(8),
-                      ),
-                      child: pw.Text('${entry.vehicleStatus} | ${entry.gateNumber}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: entry.vehicleStatus == 'Loading' ? PdfColors.blue800 : PdfColors.orange800))
-                  )
-                ]
+            // Naya: Infographic Summary Section
+            pw.Container(
+                padding: pw.EdgeInsets.all(10),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.grey100,
+                  borderRadius: pw.BorderRadius.circular(8),
+                ),
+                child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('Vehicle Summary', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
+                      pw.SizedBox(height: 10),
+                      pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                          children: [
+                            // Total Boxes (Blue)
+                            pw.Container(
+                                padding: pw.EdgeInsets.all(8),
+                                decoration: pw.BoxDecoration(color: PdfColors.blue100, borderRadius: pw.BorderRadius.circular(5)),
+                                child: pw.Column(
+                                    children: [
+                                      pw.Text('Total Boxes', style: pw.TextStyle(fontSize: 10, color: PdfColors.blue800)),
+                                      pw.Text(entry.totalReceivedBoxes.toString(), style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
+                                    ]
+                                )
+                            ),
+                            // Total Shortage (Orange)
+                            pw.Container(
+                                padding: pw.EdgeInsets.all(8),
+                                decoration: pw.BoxDecoration(color: PdfColors.orange100, borderRadius: pw.BorderRadius.circular(5)),
+                                child: pw.Column(
+                                    children: [
+                                      pw.Text('Shortage', style: pw.TextStyle(fontSize: 10, color: PdfColors.orange800)),
+                                      pw.Text(entry.totalShortage.toString(), style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.orange800)),
+                                    ]
+                                )
+                            ),
+                            // Total Extra (Purple)
+                            pw.Container(
+                                padding: pw.EdgeInsets.all(8),
+                                decoration: pw.BoxDecoration(color: PdfColors.purple100, borderRadius: pw.BorderRadius.circular(5)),
+                                child: pw.Column(
+                                    children: [
+                                      pw.Text('Extra', style: pw.TextStyle(fontSize: 10, color: PdfColors.purple800)),
+                                      pw.Text(entry.totalExtra.toString(), style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.purple800)),
+                                    ]
+                                )
+                            ),
+                            // Total Damaged (Red)
+                            pw.Container(
+                                padding: pw.EdgeInsets.all(8),
+                                decoration: pw.BoxDecoration(color: PdfColors.red100, borderRadius: pw.BorderRadius.circular(5)),
+                                child: pw.Column(
+                                    children: [
+                                      pw.Text('Damaged', style: pw.TextStyle(fontSize: 10, color: PdfColors.red800)),
+                                      pw.Text(entry.totalDamaged.toString(), style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.red800)),
+                                    ]
+                                )
+                            ),
+                          ]
+                      )
+                    ]
+                )
             ),
+            pw.SizedBox(height: 20),
             pw.SizedBox(height: 20),
             pw.TableHelper.fromTextArray(
               context: context,
