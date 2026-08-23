@@ -17,7 +17,7 @@ class VehicleEntryScreen extends StatefulWidget {
 class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
   late VehicleEntry _currentEntry;
   bool _isNewEntry = false;
-  bool _skippedStartPhotos = false; // Skip track karne ke liye
+  bool _skippedStartPhotos = false;
 
   @override
   void initState() {
@@ -44,7 +44,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
 
   @override
   void dispose() {
-    // Drafts Removal Logic: Agar naye entry me kuch type nahi hua, toh direct delete karo
     if (_isNewEntry) {
       bool isEmpty = _currentEntry.vehicleNumber.trim().isEmpty &&
           _currentEntry.driverName.trim().isEmpty &&
@@ -52,7 +51,7 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
           _currentEntry.boxes.where((b) => !b.isDeleted && b.consignmentNo.isNotEmpty).isEmpty;
 
       if (isEmpty) {
-        _currentEntry.delete(); // Trash me nahi bhejenge, direct delete
+        _currentEntry.delete();
       }
     }
     super.dispose();
@@ -66,7 +65,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
       return;
     }
 
-    // Validation: Start Photos ya toh hone chahiye ya Skip kiya hua ho
     int requiredStartPhotos = _currentEntry.vehicleStatus == 'Unloading' ? 2 : 1;
     if (_currentEntry.startPhotos.length < requiredStartPhotos && !_skippedStartPhotos) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -78,7 +76,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
       return;
     }
 
-    // Auto-complete Dictionary me save karein
     final vBox = Hive.box<String>('vehicles');
     if (_currentEntry.vehicleNumber.isNotEmpty && !vBox.containsKey(_currentEntry.vehicleNumber)) {
       vBox.put(_currentEntry.vehicleNumber, _currentEntry.vehicleNumber);
@@ -111,10 +108,20 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
     final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
 
     if (photo != null) {
+      // Force UI to rebuild with the new photo
       setState(() {
         _currentEntry.startPhotos.add(photo.path);
         _currentEntry.save();
       });
+    }
+  }
+
+  // Helper method to build instruction text
+  String _getInstructionText() {
+    if (_currentEntry.vehicleStatus == 'Unloading') {
+      return '1. Seal Photo\n2. Gate Open Photo';
+    } else {
+      return '1. Empty Vehicle Photo';
     }
   }
 
@@ -253,7 +260,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
               onChanged: (val) {
                 setState(() {
                   _currentEntry.vehicleStatus = val!;
-                  // Status change hone par photos reset karein
                   _currentEntry.startPhotos.clear();
                   _skippedStartPhotos = false;
                   _currentEntry.save();
@@ -285,7 +291,7 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
             ),
             const SizedBox(height: 20),
 
-            // --- Naya: Start Photos Section ---
+            // --- Start Photos Section ---
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -317,10 +323,9 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
                     ],
                   ),
                   const SizedBox(height: 4),
+                  // Instruction Text - Directly reading from method
                   Text(
-                    _currentEntry.vehicleStatus == 'Unloading'
-                        ? '1. Seal Photo\n2. Gate Open Photo'
-                        : '1. Empty Vehicle Photo',
+                    _getInstructionText(),
                     style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                   ),
                   const SizedBox(height: 10),
