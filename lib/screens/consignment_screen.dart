@@ -10,6 +10,7 @@ import '../models/box_item.dart';
 import '../services/export_service.dart';
 import 'barcode_scanner_screen.dart';
 import 'vehicle_entry_screen.dart';
+import 'vehicle_media_gallery_screen.dart';
 
 class ConsignmentScreen extends StatefulWidget {
   final VehicleEntry vehicleEntry;
@@ -61,6 +62,19 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     super.dispose();
   }
 
+  // Naya: Photo ko permanent folder me save karne ka function
+  Future<String> _saveImagePermanently(String tempPath) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final ext = tempPath.split('.').last;
+    final fileName = 'photo_${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final permanentPath = '${directory.path}/$fileName';
+
+    final File tempFile = File(tempPath);
+    await tempFile.copy(permanentPath);
+
+    return permanentPath;
+  }
+
   void _forceSave() {
     if (_editingBox == null) return;
 
@@ -72,10 +86,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     _editingBox!.damagedCount = _isDamaged ? (int.tryParse(_damagedCountController.text) ?? 0) : 0;
     _editingBox!.damageDetails = _isDamaged ? _damageDetailsController.text : '';
     _editingBox!.transportMode = _selectedMode;
-
-    // Fixed: List replace logic for damage photos
     _editingBox!.damagePhotos = List<String>.from(_damagePhotos);
-
     _editingBox!.sourceLocation = _sourceLocationController.text;
     _editingBox!.destinationLocation = _destinationLocationController.text;
     _editingBox!.lastEditedAt = DateTime.now();
@@ -137,7 +148,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       _damagedCountController.text = boxToEdit.damagedCount.toString();
       _damageDetailsController.text = boxToEdit.damageDetails;
       _selectedMode = boxToEdit.transportMode;
-      _damagePhotos = List<String>.from(boxToEdit.damagePhotos); // Fixed
+      _damagePhotos = List<String>.from(boxToEdit.damagePhotos);
       _sourceLocationController.text = boxToEdit.sourceLocation;
       _destinationLocationController.text = boxToEdit.destinationLocation;
       _damageCountError = false;
@@ -150,7 +161,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
         receivedBoxes: 0,
         isDamaged: false,
         createdAt: DateTime.now(),
-        damagePhotos: [], // Fixed
+        damagePhotos: [],
       );
       widget.vehicleEntry.boxes.add(_editingBox!);
       _editingIndex = widget.vehicleEntry.boxes.length - 1;
@@ -464,10 +475,11 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           final ImagePicker picker = ImagePicker();
                           final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 50);
                           if (photo != null) {
+                            // Naya: Permanent save
+                            final permanentPath = await _saveImagePermanently(photo.path);
                             setModalState(() {
-                              // FIXED: List replace logic
                               final List<String> updatedPhotos = List<String>.from(_damagePhotos);
-                              updatedPhotos.add(photo.path);
+                              updatedPhotos.add(permanentPath);
                               _damagePhotos = updatedPhotos;
                             });
                             _forceSave();
@@ -499,7 +511,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                                     child: GestureDetector(
                                       onTap: () {
                                         setModalState(() {
-                                          // FIXED: List replace logic
                                           final List<String> updatedPhotos = List<String>.from(_damagePhotos);
                                           updatedPhotos.removeAt(index);
                                           _damagePhotos = updatedPhotos;
@@ -623,10 +634,11 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       final ImagePicker picker = ImagePicker();
                       final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
                       if (photo != null) {
+                        // Naya: Permanent save
+                        final permanentPath = await _saveImagePermanently(photo.path);
                         setModalState(() {
-                          // FIXED: List replace logic
                           final List<String> updatedPhotos = List<String>.from(widget.vehicleEntry.endPhotos);
-                          updatedPhotos.add(photo.path);
+                          updatedPhotos.add(permanentPath);
                           widget.vehicleEntry.endPhotos = updatedPhotos;
                           widget.vehicleEntry.save();
                         });
@@ -659,7 +671,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                                 child: GestureDetector(
                                   onTap: () {
                                     setModalState(() {
-                                      // FIXED: List replace logic
                                       final List<String> updatedPhotos = List<String>.from(widget.vehicleEntry.endPhotos);
                                       updatedPhotos.removeAt(index);
                                       widget.vehicleEntry.endPhotos = updatedPhotos;
@@ -913,7 +924,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         context: parentContext,
                       );
 
-                      final directory = await getTemporaryDirectory();
+                      // Naya: Image ko permanent location par save karein
+                      final directory = await getApplicationDocumentsDirectory();
                       final file = await File('${directory.path}/LT_Operations_Slip.png').writeAsBytes(imageBytes);
                       await ExportService.shareImage(file, entry.vehicleNumber);
                     } catch (e) {
@@ -973,26 +985,9 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Total Boxes: ${entry.totalReceivedBoxes}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      Flexible(
-                        child: Text(
-                              () {
-                            String status = '';
-                            if (entry.totalShortage > 0) status += 'Short: ${entry.totalShortage}  ';
-                            if (entry.totalExtra > 0) status += 'Extra: ${entry.totalExtra}  ';
-                            if (entry.totalDamaged > 0) status += 'Damaged: ${entry.totalDamaged}';
-                            if (status.isEmpty) status = 'All Perfect';
-                            return status.trim();
-                          }(),
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: (entry.totalShortage > 0 || entry.totalDamaged > 0) ? Colors.red : (entry.totalExtra > 0 ? Colors.blue : Colors.green)
-                          ),
-                          textAlign: TextAlign.right,
-                        ),
-                      ),
+                    children: const [
+                      Text('LT Operations', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                      Icon(Icons.local_shipping, color: Colors.white, size: 30),
                     ],
                   ),
                   const Text('Transport Supervisor Report', style: TextStyle(color: Colors.white70, fontSize: 14)),
@@ -1207,44 +1202,97 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
         backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
         actions: [
-          if (!entry.isCompleted)
-            TextButton.icon(
-              icon: const Icon(Icons.check_circle, color: Colors.white),
-              label: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              onPressed: _showCompleteProcessPopup,
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.check_circle, color: Colors.green),
-              tooltip: 'Process Completed',
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('This vehicle process is already completed.')),
-                );
-              },
-            ),
+          // 1. Direct Export/Share Icon (Sabse zyada use hone wala)
           IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Deleted Boxes',
-            onPressed: _showTrashForThisVehicle,
+            icon: const Icon(Icons.ios_share, color: Colors.white),
+            tooltip: 'Export & Share',
+            onPressed: _showExportMenu,
           ),
-          IconButton(
-            icon: const Icon(Icons.edit_document),
-            onPressed: () async {
+
+          // 2. Three-Dot Menu for secondary actions
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onSelected: (value) {
               _boxSearchFocusNode.unfocus();
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => VehicleEntryScreen(existingEntry: widget.vehicleEntry),
-                ),
-              );
-              if (mounted) {
-                _boxSearchFocusNode.unfocus();
-                setState(() {});
+              if (value == 'done') {
+                if (!entry.isCompleted) {
+                  _showCompleteProcessPopup();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('This vehicle process is already completed.')),
+                  );
+                }
+              } else if (value == 'gallery') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => VehicleMediaGalleryScreen(vehicleEntry: widget.vehicleEntry),
+                  ),
+                ).then((_) {
+                  if (mounted) setState(() {});
+                });
+              } else if (value == 'edit') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => VehicleEntryScreen(existingEntry: widget.vehicleEntry),
+                  ),
+                ).then((_) {
+                  if (mounted) setState(() {});
+                });
+              } else if (value == 'trash') {
+                _showTrashForThisVehicle();
               }
             },
+            itemBuilder: (context) => [
+              // Done Option
+              PopupMenuItem(
+                value: 'done',
+                child: ListTile(
+                  leading: Icon(
+                      Icons.check_circle,
+                      color: entry.isCompleted ? Colors.green : Colors.blue[800]
+                  ),
+                  title: Text(
+                    entry.isCompleted ? 'Process Completed' : 'Complete Process',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: entry.isCompleted ? Colors.green : Colors.black87
+                    ),
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuDivider(),
+              // Edit Option
+              const PopupMenuItem(
+                value: 'edit',
+                child: ListTile(
+                  leading: Icon(Icons.edit_document, color: Colors.blue),
+                  title: Text('Edit Vehicle Details'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              // Gallery Option
+              const PopupMenuItem(
+                value: 'gallery',
+                child: ListTile(
+                  leading: Icon(Icons.photo_library, color: Colors.purple),
+                  title: Text('Media Gallery'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              // Trash Option
+              const PopupMenuItem(
+                value: 'trash',
+                child: ListTile(
+                  leading: Icon(Icons.delete_outline, color: Colors.red),
+                  title: Text('Deleted Boxes'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
           ),
-          IconButton(icon: const Icon(Icons.ios_share), onPressed: _showExportMenu),
         ],
       ),
       body: GestureDetector(

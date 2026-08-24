@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart'; // Naya Import
 import '../models/vehicle_entry.dart';
 import 'consignment_screen.dart';
 
@@ -36,8 +37,8 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
         entryDate: DateTime.now(),
         isCompleted: false,
         lastEditedAt: DateTime.now(),
-        startPhotos: [], // FIXED: Mutable list
-        endPhotos: [],   // FIXED: Mutable list
+        startPhotos: [],
+        endPhotos: [],
       );
       _isNewEntry = true;
       final box = Hive.box<VehicleEntry>('vehicle_entries');
@@ -107,14 +108,29 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
     }
   }
 
+  // Naya: Photo ko permanent folder me save karne ka function
+  Future<String> _saveImagePermanently(String tempPath) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final ext = tempPath.split('.').last;
+    final fileName = 'photo_${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final permanentPath = '${directory.path}/$fileName';
+
+    final File tempFile = File(tempPath);
+    await tempFile.copy(permanentPath);
+
+    return permanentPath;
+  }
+
   Future<void> _takeStartPhoto() async {
     final ImagePicker picker = ImagePicker();
     final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
 
     if (photo != null && mounted) {
-      // FIXED: List ko replace karenge taaki const list ki problem na aaye
+      // Photo ko permanent location par save karein
+      final permanentPath = await _saveImagePermanently(photo.path);
+
       final List<String> updatedPhotos = List<String>.from(_currentEntry.startPhotos);
-      updatedPhotos.add(photo.path);
+      updatedPhotos.add(permanentPath); // Permanent path save karein
 
       setState(() {
         _currentEntry.startPhotos = updatedPhotos;
@@ -151,7 +167,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Vehicle Number
               Autocomplete<String>(
                 initialValue: TextEditingValue(text: _currentEntry.vehicleNumber),
                 fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
@@ -184,7 +199,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Driver Name
               Autocomplete<String>(
                 initialValue: TextEditingValue(text: _currentEntry.driverName),
                 fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
@@ -216,7 +230,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Driver Mobile
               Autocomplete<String>(
                 initialValue: TextEditingValue(text: _currentEntry.driverMobile),
                 fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
@@ -248,7 +261,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Load / Unload Dropdown
               DropdownButtonFormField<String>(
                 value: _selectedStatus,
                 decoration: const InputDecoration(
@@ -265,7 +277,7 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
                   setState(() {
                     _selectedStatus = val!;
                     _currentEntry.vehicleStatus = val;
-                    _currentEntry.startPhotos = []; // Reset photos
+                    _currentEntry.startPhotos = [];
                     _skippedStartPhotos = false;
                     _currentEntry.save();
                   });
@@ -273,7 +285,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Gate Number Dropdown
               DropdownButtonFormField<String>(
                 value: _currentEntry.gateNumber,
                 decoration: const InputDecoration(
@@ -297,7 +308,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
               ),
               const SizedBox(height: 20),
 
-              // --- Start Photos Section ---
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -379,7 +389,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
                                   child: GestureDetector(
                                     onTap: () {
                                       setState(() {
-                                        // FIXED: List replace logic
                                         final List<String> updatedPhotos = List<String>.from(_currentEntry.startPhotos);
                                         updatedPhotos.removeAt(index);
                                         _currentEntry.startPhotos = updatedPhotos;
@@ -404,7 +413,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
 
               const SizedBox(height: 30),
 
-              // Next / Update Button
               SizedBox(
                 width: double.infinity,
                 height: 50,

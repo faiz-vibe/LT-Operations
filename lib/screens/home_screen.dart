@@ -5,6 +5,7 @@ import 'vehicle_entry_screen.dart';
 import 'consignment_screen.dart';
 import 'trash_screen.dart';
 import 'manage_suggestions_screen.dart';
+import 'reports_screen.dart'; // Naya Import
 import '../services/backup_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -88,7 +89,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
         final trashCount = box.values.where((e) => e.isDeleted).length;
 
-        // Check karein ki koi incomplete entry (draft) hai ya nahi (ignore it is just for commit)
         final draftEntry = box.values.cast<VehicleEntry?>().firstWhere(
               (entry) => entry != null && !entry.isCompleted && !entry.isDeleted,
           orElse: () => null,
@@ -167,6 +167,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const ManageSuggestionsScreen()));
+                  },
+                ),
+                // Naya: Reports & Analytics Link
+                ListTile(
+                  leading: Icon(Icons.bar_chart, color: Colors.green[800]),
+                  title: const Text('Reports & Analytics'),
+                  subtitle: const Text('Aaj ka summary aur stats dekhein'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportsScreen()));
                   },
                 ),
               ],
@@ -332,7 +342,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   'Total Boxes: ${entry.totalReceivedBoxes}',
                                   style: const TextStyle(fontWeight: FontWeight.w500),
                                 ),
-                                // Naya: Smart Status Display
                                 Text(
                                       () {
                                     String status = '';
@@ -380,7 +389,6 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisAlignment: MainAxisAlignment.end,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Draft Button (Sirf tabhi dikhega jab koi incomplete entry hogi)
               if (draftEntry != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12.0),
@@ -399,12 +407,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-              // New Vehicle Button (Hamesha dikhega aur bada hoga)
               FloatingActionButton.extended(
                 heroTag: 'new_vehicle_btn',
                 onPressed: () {
                   _searchFocusNode.unfocus();
-                  _navigateToEntry(); // Hamesha nayi entry kholega
+                  _navigateToEntry();
                 },
                 backgroundColor: Colors.blue[800],
                 icon: const Icon(Icons.add, color: Colors.white, size: 32),
