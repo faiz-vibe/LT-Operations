@@ -204,11 +204,15 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 16),
+
+                    // 1. Consignment (Next -> Company)
                     Row(
                       children: [
                         Expanded(
                           child: TextField(
                             controller: _consignmentController,
+                            textInputAction: TextInputAction.next,
+                            onSubmitted: (_) => FocusScope.of(context).nextFocus(),
                             onChanged: (val) => _forceSave(),
                             decoration: const InputDecoration(
                               labelText: 'Consignment/Product No',
@@ -218,42 +222,49 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Container(
-                          height: 50,
-                          width: 50,
-                          decoration: BoxDecoration(
-                            color: Colors.blue[800],
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
-                            onPressed: () async {
-                              _boxSearchFocusNode.unfocus();
-                              final scannedCode = await Navigator.push<String>(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const BarcodeScannerScreen(),
-                                ),
-                              );
-                              if (scannedCode != null && scannedCode.isNotEmpty) {
-                                setState(() {
-                                  _consignmentController.text = scannedCode;
-                                });
-                                _forceSave();
-                              }
-                            },
+                        // Barcode button (Focus skip)
+                        Focus(
+                          canRequestFocus: false,
+                          child: Container(
+                            height: 50,
+                            width: 50,
+                            decoration: BoxDecoration(
+                              color: Colors.blue[800],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: IconButton(
+                              icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
+                              onPressed: () async {
+                                _boxSearchFocusNode.unfocus();
+                                final scannedCode = await Navigator.push<String>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const BarcodeScannerScreen(),
+                                  ),
+                                );
+                                if (scannedCode != null && scannedCode.isNotEmpty) {
+                                  setState(() {
+                                    _consignmentController.text = scannedCode;
+                                  });
+                                  _forceSave();
+                                }
+                              },
+                            ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 10),
+
+                    // 2. Company Name (Next -> Source)
                     Autocomplete<String>(
                       initialValue: TextEditingValue(text: _companyController.text),
                       fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
                         return TextField(
                           controller: controller,
                           focusNode: focusNode,
-                          onEditingComplete: onEditingComplete,
+                          textInputAction: TextInputAction.next,
+                          onSubmitted: (_) => FocusScope.of(context).nextFocus(),
                           onChanged: (val) {
                             _companyController.text = val;
                             _forceSave();
@@ -276,12 +287,12 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       onSelected: (String selection) {
                         _companyController.text = selection;
                         _forceSave();
-                        FocusScope.of(context).unfocus();
+                        FocusScope.of(context).nextFocus();
                       },
                     ),
                     const SizedBox(height: 10),
 
-                    // Location (Source To Destination)
+                    // 3 & 4. Source & Dest (Next -> Expected)
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -292,7 +303,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                               return TextField(
                                 controller: controller,
                                 focusNode: focusNode,
-                                onEditingComplete: onEditingComplete,
+                                textInputAction: TextInputAction.next,
+                                onSubmitted: (_) => FocusScope.of(context).nextFocus(),
                                 textCapitalization: TextCapitalization.words,
                                 onChanged: (val) {
                                   _sourceLocationController.text = val;
@@ -316,7 +328,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                             onSelected: (String selection) {
                               _sourceLocationController.text = selection;
                               _forceSave();
-                              FocusScope.of(context).unfocus();
+                              FocusScope.of(context).nextFocus();
                             },
                           ),
                         ),
@@ -331,7 +343,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                               return TextField(
                                 controller: controller,
                                 focusNode: focusNode,
-                                onEditingComplete: onEditingComplete,
+                                textInputAction: TextInputAction.next,
+                                onSubmitted: (_) => FocusScope.of(context).nextFocus(),
                                 textCapitalization: TextCapitalization.words,
                                 onChanged: (val) {
                                   _destinationLocationController.text = val;
@@ -355,7 +368,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                             onSelected: (String selection) {
                               _destinationLocationController.text = selection;
                               _forceSave();
-                              FocusScope.of(context).unfocus();
+                              FocusScope.of(context).nextFocus();
                             },
                           ),
                         ),
@@ -363,12 +376,15 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     ),
                     const SizedBox(height: 10),
 
+                    // 5 & 6. Expected & Received (Expected -> Next, Received -> Done/Save)
                     Row(
                       children: [
                         Expanded(
                           child: TextField(
                             controller: _expectedController,
                             keyboardType: TextInputType.number,
+                            textInputAction: TextInputAction.next,
+                            onSubmitted: (_) => FocusScope.of(context).nextFocus(),
                             onChanged: (val) => _forceSave(),
                             decoration: const InputDecoration(labelText: 'Expected', border: OutlineInputBorder()),
                           ),
@@ -378,6 +394,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           child: TextField(
                             controller: _receivedController,
                             keyboardType: TextInputType.number,
+                            textInputAction: TextInputAction.done, // Yahan Tick (Done) aayega
+                            onSubmitted: (_) => _saveAndClosePopup(sheetContext), // Enter/Done dabate hi save ho jayega
                             onChanged: (val) => _forceSave(),
                             decoration: const InputDecoration(labelText: 'Received', border: OutlineInputBorder()),
                           ),
@@ -385,6 +403,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       ],
                     ),
                     const SizedBox(height: 10),
+
+                    // Baaki ka code (Damage, Mode, Button) waisa hi rahega...
                     SwitchListTile(
                       title: const Text('Damaged Box'),
                       value: _isDamaged,
@@ -399,6 +419,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       TextField(
                         controller: _damagedCountController,
                         keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) => FocusScope.of(context).nextFocus(),
                         onChanged: (val) {
                           setModalState(() {
                             _damageCountError = val.isEmpty || (int.tryParse(val) ?? 0) <= 0;
@@ -424,7 +446,8 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           return TextField(
                             controller: controller,
                             focusNode: focusNode,
-                            onEditingComplete: onEditingComplete,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => FocusScope.of(context).unfocus(),
                             maxLines: 2,
                             onChanged: (val) {
                               _damageDetailsController.text = val;
@@ -475,7 +498,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           final ImagePicker picker = ImagePicker();
                           final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 50);
                           if (photo != null) {
-                            // Naya: Permanent save
                             final permanentPath = await _saveImagePermanently(photo.path);
                             setModalState(() {
                               final List<String> updatedPhotos = List<String>.from(_damagePhotos);
@@ -1529,13 +1551,17 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           _boxSearchFocusNode.unfocus();
           _showBoxPopup();
         },
         backgroundColor: Colors.blue[800],
-        child: const Icon(Icons.add, color: Colors.white),
+        icon: const Icon(Icons.add, color: Colors.white, size: 32), // Icon bada kiya
+        label: const Text(
+            'Add Box',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18) // Text bada kiya
+        ),
       ),
     );
   }
