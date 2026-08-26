@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import '../models/vehicle_entry.dart';
 import '../models/box_item.dart';
+import '../services/media_service.dart'; // Naya Import
 
 class VehicleMediaGalleryScreen extends StatefulWidget {
   final VehicleEntry vehicleEntry;
@@ -22,19 +22,6 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
   void initState() {
     super.initState();
     _entry = widget.vehicleEntry;
-  }
-
-  // Helper: Photo ko permanent folder me save karne ke liye
-  Future<String> _saveImagePermanently(String tempPath) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final ext = tempPath.split('.').last;
-    final fileName = 'photo_${DateTime.now().millisecondsSinceEpoch}.$ext';
-    final permanentPath = '${directory.path}/$fileName';
-
-    final File tempFile = File(tempPath);
-    await tempFile.copy(permanentPath);
-
-    return permanentPath;
   }
 
   // Full Screen View (Zoomable)
@@ -80,7 +67,8 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
     final XFile? photo = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
     if (photo == null) return;
 
-    final newPath = await _saveImagePermanently(photo.path);
+    // MediaService ka use kiya gaya hai
+    final newPath = await MediaService.saveImagePermanently(photo.path);
 
     setState(() {
       if (category == 'Start') {
@@ -107,7 +95,8 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
     final XFile? photo = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
     if (photo == null) return;
 
-    final newPath = await _saveImagePermanently(photo.path);
+    // MediaService ka use kiya gaya hai
+    final newPath = await MediaService.saveImagePermanently(photo.path);
 
     setState(() {
       if (category == 'Start') {

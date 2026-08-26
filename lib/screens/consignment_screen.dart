@@ -8,6 +8,7 @@ import '../services/google_sync_service.dart';
 import '../models/vehicle_entry.dart';
 import '../models/box_item.dart';
 import '../services/export_service.dart';
+import '../services/media_service.dart';
 import 'barcode_scanner_screen.dart';
 import 'vehicle_entry_screen.dart';
 import 'vehicle_media_gallery_screen.dart';
@@ -34,6 +35,13 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
   final _sourceLocationController = TextEditingController();
   final _destinationLocationController = TextEditingController();
 
+  // Pro FocusNodes for perfect keyboard navigation
+  final FocusNode _companyFocusNode = FocusNode();
+  final FocusNode _sourceFocusNode = FocusNode();
+  final FocusNode _destFocusNode = FocusNode();
+  final FocusNode _expectedFocusNode = FocusNode();
+  final FocusNode _receivedFocusNode = FocusNode();
+
   String _boxSearchQuery = '';
   final FocusNode _boxSearchFocusNode = FocusNode();
 
@@ -57,22 +65,14 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     _boxSearchController.dispose();
     _listScrollController.dispose();
     _boxSearchFocusNode.dispose();
+    _companyFocusNode.dispose();
+    _sourceFocusNode.dispose();
+    _destFocusNode.dispose();
+    _expectedFocusNode.dispose();
+    _receivedFocusNode.dispose();
     _sourceLocationController.dispose();
     _destinationLocationController.dispose();
     super.dispose();
-  }
-
-  // Naya: Photo ko permanent folder me save karne ka function
-  Future<String> _saveImagePermanently(String tempPath) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final ext = tempPath.split('.').last;
-    final fileName = 'photo_${DateTime.now().millisecondsSinceEpoch}.$ext';
-    final permanentPath = '${directory.path}/$fileName';
-
-    final File tempFile = File(tempPath);
-    await tempFile.copy(permanentPath);
-
-    return permanentPath;
   }
 
   void _forceSave() {
@@ -212,8 +212,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           child: TextField(
                             controller: _consignmentController,
                             textInputAction: TextInputAction.next,
-                            onSubmitted: (_) => FocusScope.of(context).nextFocus(),
-                            onChanged: (val) => _forceSave(),
+                            onSubmitted: (_) => _companyFocusNode.requestFocus(),
                             decoration: const InputDecoration(
                               labelText: 'Consignment/Product No',
                               border: OutlineInputBorder(),
@@ -246,7 +245,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                                   setState(() {
                                     _consignmentController.text = scannedCode;
                                   });
-                                  _forceSave();
+                                  _companyFocusNode.requestFocus();
                                 }
                               },
                             ),
@@ -260,14 +259,15 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     Autocomplete<String>(
                       initialValue: TextEditingValue(text: _companyController.text),
                       fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                        // Apna FocusNode yahan set kiya gaya hai
+                        focusNode = _companyFocusNode;
                         return TextField(
                           controller: controller,
                           focusNode: focusNode,
                           textInputAction: TextInputAction.next,
-                          onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                          onSubmitted: (_) => _sourceFocusNode.requestFocus(),
                           onChanged: (val) {
                             _companyController.text = val;
-                            _forceSave();
                           },
                           decoration: const InputDecoration(
                             labelText: 'Company Name',
@@ -286,8 +286,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       },
                       onSelected: (String selection) {
                         _companyController.text = selection;
-                        _forceSave();
-                        FocusScope.of(context).nextFocus();
+                        _sourceFocusNode.requestFocus();
                       },
                     ),
                     const SizedBox(height: 10),
@@ -300,15 +299,15 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           child: Autocomplete<String>(
                             initialValue: TextEditingValue(text: _sourceLocationController.text),
                             fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                              focusNode = _sourceFocusNode;
                               return TextField(
                                 controller: controller,
                                 focusNode: focusNode,
                                 textInputAction: TextInputAction.next,
-                                onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                                onSubmitted: (_) => _destFocusNode.requestFocus(),
                                 textCapitalization: TextCapitalization.words,
                                 onChanged: (val) {
                                   _sourceLocationController.text = val;
-                                  _forceSave();
                                 },
                                 decoration: const InputDecoration(
                                   labelText: 'From (Source)',
@@ -327,8 +326,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                             },
                             onSelected: (String selection) {
                               _sourceLocationController.text = selection;
-                              _forceSave();
-                              FocusScope.of(context).nextFocus();
+                              _destFocusNode.requestFocus();
                             },
                           ),
                         ),
@@ -340,15 +338,15 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           child: Autocomplete<String>(
                             initialValue: TextEditingValue(text: _destinationLocationController.text),
                             fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                              focusNode = _destFocusNode;
                               return TextField(
                                 controller: controller,
                                 focusNode: focusNode,
                                 textInputAction: TextInputAction.next,
-                                onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                                onSubmitted: (_) => _expectedFocusNode.requestFocus(),
                                 textCapitalization: TextCapitalization.words,
                                 onChanged: (val) {
                                   _destinationLocationController.text = val;
-                                  _forceSave();
                                 },
                                 decoration: const InputDecoration(
                                   labelText: 'To (Dest)',
@@ -367,8 +365,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                             },
                             onSelected: (String selection) {
                               _destinationLocationController.text = selection;
-                              _forceSave();
-                              FocusScope.of(context).nextFocus();
+                              _expectedFocusNode.requestFocus();
                             },
                           ),
                         ),
@@ -382,10 +379,10 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         Expanded(
                           child: TextField(
                             controller: _expectedController,
+                            focusNode: _expectedFocusNode,
                             keyboardType: TextInputType.number,
                             textInputAction: TextInputAction.next,
-                            onSubmitted: (_) => FocusScope.of(context).nextFocus(),
-                            onChanged: (val) => _forceSave(),
+                            onSubmitted: (_) => _receivedFocusNode.requestFocus(),
                             decoration: const InputDecoration(labelText: 'Expected', border: OutlineInputBorder()),
                           ),
                         ),
@@ -393,10 +390,10 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         Expanded(
                           child: TextField(
                             controller: _receivedController,
+                            focusNode: _receivedFocusNode,
                             keyboardType: TextInputType.number,
                             textInputAction: TextInputAction.done, // Yahan Tick (Done) aayega
                             onSubmitted: (_) => _saveAndClosePopup(sheetContext), // Enter/Done dabate hi save ho jayega
-                            onChanged: (val) => _forceSave(),
                             decoration: const InputDecoration(labelText: 'Received', border: OutlineInputBorder()),
                           ),
                         ),
@@ -410,7 +407,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       value: _isDamaged,
                       onChanged: (val) {
                         setModalState(() => _isDamaged = val);
-                        _forceSave();
                       },
                       activeColor: Colors.red,
                     ),
@@ -425,7 +421,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           setModalState(() {
                             _damageCountError = val.isEmpty || (int.tryParse(val) ?? 0) <= 0;
                           });
-                          _forceSave();
                         },
                         decoration: InputDecoration(
                           labelText: 'Kitne Box Damage Hue?',
@@ -451,7 +446,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                             maxLines: 2,
                             onChanged: (val) {
                               _damageDetailsController.text = val;
-                              _forceSave();
                             },
                             decoration: const InputDecoration(
                                 labelText: 'Damage Details',
@@ -470,7 +464,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         },
                         onSelected: (String selection) {
                           _damageDetailsController.text = selection;
-                          _forceSave();
                           FocusScope.of(context).unfocus();
                         },
                       ),
@@ -498,13 +491,12 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           final ImagePicker picker = ImagePicker();
                           final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 50);
                           if (photo != null) {
-                            final permanentPath = await _saveImagePermanently(photo.path);
+                            final permanentPath = await MediaService.saveImagePermanently(photo.path);
                             setModalState(() {
                               final List<String> updatedPhotos = List<String>.from(_damagePhotos);
                               updatedPhotos.add(permanentPath);
                               _damagePhotos = updatedPhotos;
                             });
-                            _forceSave();
                           }
                         },
                       ),
@@ -537,7 +529,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                                           updatedPhotos.removeAt(index);
                                           _damagePhotos = updatedPhotos;
                                         });
-                                        _forceSave();
                                       },
                                       child: Container(
                                         padding: const EdgeInsets.all(2),
@@ -570,7 +561,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         setModalState(() {
                           _selectedMode = val!;
                         });
-                        _forceSave();
                       },
                     ),
                     const SizedBox(height: 20),
@@ -656,8 +646,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                       final ImagePicker picker = ImagePicker();
                       final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
                       if (photo != null) {
-                        // Naya: Permanent save
-                        final permanentPath = await _saveImagePermanently(photo.path);
+                        final permanentPath = await MediaService.saveImagePermanently(photo.path);
                         setModalState(() {
                           final List<String> updatedPhotos = List<String>.from(widget.vehicleEntry.endPhotos);
                           updatedPhotos.add(permanentPath);
@@ -946,7 +935,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         context: parentContext,
                       );
 
-                      // Naya: Image ko permanent location par save karein
                       final directory = await getApplicationDocumentsDirectory();
                       final file = await File('${directory.path}/LT_Operations_Slip.png').writeAsBytes(imageBytes);
                       await ExportService.shareImage(file, entry.vehicleNumber);
@@ -1224,14 +1212,11 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
         backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
         actions: [
-          // 1. Direct Export/Share Icon (Sabse zyada use hone wala)
           IconButton(
             icon: const Icon(Icons.ios_share, color: Colors.white),
             tooltip: 'Export & Share',
             onPressed: _showExportMenu,
           ),
-
-          // 2. Three-Dot Menu for secondary actions
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: (value) {
@@ -1267,7 +1252,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
               }
             },
             itemBuilder: (context) => [
-              // Done Option
               PopupMenuItem(
                 value: 'done',
                 child: ListTile(
@@ -1286,7 +1270,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                 ),
               ),
               const PopupMenuDivider(),
-              // Edit Option
               const PopupMenuItem(
                 value: 'edit',
                 child: ListTile(
@@ -1295,7 +1278,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
-              // Gallery Option
               const PopupMenuItem(
                 value: 'gallery',
                 child: ListTile(
@@ -1304,7 +1286,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
-              // Trash Option
               const PopupMenuItem(
                 value: 'trash',
                 child: ListTile(
@@ -1557,10 +1538,10 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
           _showBoxPopup();
         },
         backgroundColor: Colors.blue[800],
-        icon: const Icon(Icons.add, color: Colors.white, size: 32), // Icon bada kiya
+        icon: const Icon(Icons.add, color: Colors.white, size: 32),
         label: const Text(
             'Add Box',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18) // Text bada kiya
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)
         ),
       ),
     );

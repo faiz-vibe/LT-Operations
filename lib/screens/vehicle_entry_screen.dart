@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart'; // Naya Import
 import '../models/vehicle_entry.dart';
+import '../services/media_service.dart';
 import 'consignment_screen.dart';
 
 class VehicleEntryScreen extends StatefulWidget {
@@ -20,6 +20,10 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
   bool _isNewEntry = false;
   bool _skippedStartPhotos = false;
   late String _selectedStatus;
+
+  // Pro FocusNodes for perfect keyboard navigation
+  final FocusNode _driverNameFocusNode = FocusNode();
+  final FocusNode _driverMobileFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -49,6 +53,9 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
 
   @override
   void dispose() {
+    _driverNameFocusNode.dispose();
+    _driverMobileFocusNode.dispose();
+
     if (_isNewEntry) {
       bool isEmpty = _currentEntry.vehicleNumber.trim().isEmpty &&
           _currentEntry.driverName.trim().isEmpty &&
@@ -108,29 +115,15 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
     }
   }
 
-  // Naya: Photo ko permanent folder me save karne ka function
-  Future<String> _saveImagePermanently(String tempPath) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final ext = tempPath.split('.').last;
-    final fileName = 'photo_${DateTime.now().millisecondsSinceEpoch}.$ext';
-    final permanentPath = '${directory.path}/$fileName';
-
-    final File tempFile = File(tempPath);
-    await tempFile.copy(permanentPath);
-
-    return permanentPath;
-  }
-
   Future<void> _takeStartPhoto() async {
     final ImagePicker picker = ImagePicker();
     final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
 
     if (photo != null && mounted) {
-      // Photo ko permanent location par save karein
-      final permanentPath = await _saveImagePermanently(photo.path);
+      final permanentPath = await MediaService.saveImagePermanently(photo.path);
 
       final List<String> updatedPhotos = List<String>.from(_currentEntry.startPhotos);
-      updatedPhotos.add(permanentPath); // Permanent path save karein
+      updatedPhotos.add(permanentPath);
 
       setState(() {
         _currentEntry.startPhotos = updatedPhotos;
@@ -167,6 +160,7 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
               ),
               const SizedBox(height: 16),
 
+              // 1. Vehicle Number (Next -> Driver Name)
               Autocomplete<String>(
                 initialValue: TextEditingValue(text: _currentEntry.vehicleNumber),
                 fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
@@ -175,6 +169,8 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
                     focusNode: focusNode,
                     onEditingComplete: onEditingComplete,
                     textCapitalization: TextCapitalization.characters,
+                    textInputAction: TextInputAction.next,
+                    onSubmitted: (_) => _driverNameFocusNode.requestFocus(),
                     onChanged: (val) {
                       _currentEntry.vehicleNumber = val.toUpperCase();
                       _currentEntry.save();
@@ -195,18 +191,24 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
                 onSelected: (String selection) {
                   _currentEntry.vehicleNumber = selection.toUpperCase();
                   _currentEntry.save();
+                  _driverNameFocusNode.requestFocus();
                 },
               ),
               const SizedBox(height: 16),
 
+              // 2. Driver Name (Next -> Driver Mobile)
               Autocomplete<String>(
                 initialValue: TextEditingValue(text: _currentEntry.driverName),
                 fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                  // Apna FocusNode set kiya gaya hai
+                  focusNode = _driverNameFocusNode;
                   return TextField(
                     controller: controller,
                     focusNode: focusNode,
                     onEditingComplete: onEditingComplete,
                     textCapitalization: TextCapitalization.words,
+                    textInputAction: TextInputAction.next,
+                    onSubmitted: (_) => _driverMobileFocusNode.requestFocus(),
                     onChanged: (val) {
                       _currentEntry.driverName = val;
                       _currentEntry.save();
@@ -226,18 +228,26 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
                 onSelected: (String selection) {
                   _currentEntry.driverName = selection;
                   _currentEntry.save();
+                  _driverMobileFocusNode.requestFocus();
                 },
               ),
               const SizedBox(height: 16),
 
+              // 3. Driver Mobile (Done/Tick -> Auto Proceed/Save)
               Autocomplete<String>(
                 initialValue: TextEditingValue(text: _currentEntry.driverMobile),
                 fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                  focusNode = _driverMobileFocusNode;
                   return TextField(
                     controller: controller,
                     focusNode: focusNode,
                     onEditingComplete: onEditingComplete,
                     keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.done, // Yahan Tick (Done) aayega
+                    onSubmitted: (_) {
+                      FocusScope.of(context).unfocus();
+                      _proceedOrSave(); // Tick dabate hi save/proceed ho jayega
+                    },
                     onChanged: (val) {
                       _currentEntry.driverMobile = val;
                       _currentEntry.save();
@@ -257,6 +267,7 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
                 onSelected: (String selection) {
                   _currentEntry.driverMobile = selection;
                   _currentEntry.save();
+                  FocusScope.of(context).unfocus();
                 },
               ),
               const SizedBox(height: 16),
