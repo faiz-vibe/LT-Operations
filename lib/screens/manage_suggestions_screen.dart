@@ -19,18 +19,29 @@ class _ManageSuggestionsScreenState extends State<ManageSuggestionsScreen> {
     'Driver Mobile': 'driver_mobiles',
     'Company Name': 'companies',
     'Damage Details': 'damage_details',
-    'Locations': 'locations', // Naya category add hua
+    'Locations': 'locations',
   };
 
   void _addWord() {
-    if (_textController.text.isEmpty) return;
+    // PRO FIX: Extra spaces hatao (trim)
+    final rawWord = _textController.text.trim();
+    if (rawWord.isEmpty) return;
+
     final boxName = _categoryBoxes[_selectedCategory]!;
     final box = Hive.box<String>(boxName);
-    final word = _selectedCategory == 'Vehicle Number'
-        ? _textController.text.toUpperCase()
-        : _textController.text;
 
-    box.put(word, word);
+    // Vehicle number ko uppercase banao
+    final word = _selectedCategory == 'Vehicle Number'
+        ? rawWord.toUpperCase()
+        : rawWord;
+
+    // PRO FIX: Case-insensitive check (bade-chhote letter ka farq na khe)
+    final exists = box.values.any((val) => val.toLowerCase() == word.toLowerCase());
+
+    if (!exists) {
+      box.put(word, word);
+    }
+
     _textController.clear();
     Navigator.pop(context);
   }

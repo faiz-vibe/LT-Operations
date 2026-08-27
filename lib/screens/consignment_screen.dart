@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Naya Import for Input Formatting
 import 'package:hive/hive.dart';
 import 'dart:io';
 import 'package:screenshot/screenshot.dart';
@@ -35,15 +36,15 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
   final _sourceLocationController = TextEditingController();
   final _destinationLocationController = TextEditingController();
 
+  String _boxSearchQuery = '';
+  final FocusNode _boxSearchFocusNode = FocusNode();
+
   // Pro FocusNodes for perfect keyboard navigation
   final FocusNode _companyFocusNode = FocusNode();
   final FocusNode _sourceFocusNode = FocusNode();
   final FocusNode _destFocusNode = FocusNode();
   final FocusNode _expectedFocusNode = FocusNode();
   final FocusNode _receivedFocusNode = FocusNode();
-
-  String _boxSearchQuery = '';
-  final FocusNode _boxSearchFocusNode = FocusNode();
 
   bool _isDamaged = false;
   String _selectedMode = 'Surface';
@@ -221,7 +222,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // Barcode button (Focus skip)
                         Focus(
                           canRequestFocus: false,
                           child: Container(
@@ -259,7 +259,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     Autocomplete<String>(
                       initialValue: TextEditingValue(text: _companyController.text),
                       fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                        // Apna FocusNode yahan set kiya gaya hai
                         focusNode = _companyFocusNode;
                         return TextField(
                           controller: controller,
@@ -373,7 +372,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // 5 & 6. Expected & Received (Expected -> Next, Received -> Done/Save)
+                    // 5 & 6. Expected & Received (Input Validation Added)
                     Row(
                       children: [
                         Expanded(
@@ -383,6 +382,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                             keyboardType: TextInputType.number,
                             textInputAction: TextInputAction.next,
                             onSubmitted: (_) => _receivedFocusNode.requestFocus(),
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Only Positive Numbers
                             decoration: const InputDecoration(labelText: 'Expected', border: OutlineInputBorder()),
                           ),
                         ),
@@ -392,8 +392,9 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                             controller: _receivedController,
                             focusNode: _receivedFocusNode,
                             keyboardType: TextInputType.number,
-                            textInputAction: TextInputAction.done, // Yahan Tick (Done) aayega
-                            onSubmitted: (_) => _saveAndClosePopup(sheetContext), // Enter/Done dabate hi save ho jayega
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _saveAndClosePopup(sheetContext),
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Only Positive Numbers
                             decoration: const InputDecoration(labelText: 'Received', border: OutlineInputBorder()),
                           ),
                         ),
@@ -401,7 +402,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Baaki ka code (Damage, Mode, Button) waisa hi rahega...
                     SwitchListTile(
                       title: const Text('Damaged Box'),
                       value: _isDamaged,
@@ -417,6 +417,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         keyboardType: TextInputType.number,
                         textInputAction: TextInputAction.next,
                         onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Only Positive Numbers
                         onChanged: (val) {
                           setModalState(() {
                             _damageCountError = val.isEmpty || (int.tryParse(val) ?? 0) <= 0;
@@ -599,7 +600,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     });
   }
 
-  // Naya: Complete Process Popup (End Photos)
+  // Complete Process Popup (Non-Blocking Sync)
   Future<void> _showCompleteProcessPopup() async {
     _boxSearchFocusNode.unfocus();
 
@@ -722,46 +723,43 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                         backgroundColor: canComplete ? Colors.green[800] : Colors.grey,
                         foregroundColor: Colors.white,
                       ),
+                      // NON-BLOCKING SYNC IMPLEMENTED HERE
                       onPressed: canComplete ? () async {
-                        showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (BuildContext context) {
-                            return const AlertDialog(
-                              content: Row(
-                                children: [
-                                  CircularProgressIndicator(),
-                                  SizedBox(width: 20),
-                                  Text("Syncing to Google..."),
-                                ],
-                              ),
-                            );
-                          },
-                        );
-
-                        bool isSynced = await GoogleSyncService.syncToSheet(widget.vehicleEntry);
-
-                        if (context.mounted) Navigator.pop(context);
-
+                        // 1. Turant local DB me complete mark kar do
                         widget.vehicleEntry.isCompleted = true;
                         widget.vehicleEntry.save();
                         final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
                         hiveBox.flush();
 
+                        // 2. Popup aur Screen turant band kar do
+                        if (context.mounted) {
+                          Navigator.pop(context); // Popup band
+                          Navigator.pop(context); // Consignment screen band
+                        }
+
+                        // 3. User ko turant success dikhao
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(isSynced
-                                  ? 'Process Complete & Synced to Google Sheet!'
-                                  : 'Saved locally. Sync failed (No internet).'),
-                              backgroundColor: isSynced ? Colors.green : Colors.orange,
+                            const SnackBar(
+                              content: Text('Process Completed! Syncing data in background...'),
+                              backgroundColor: Colors.blue,
                             ),
                           );
                         }
 
+                        // 4. Background me Sync Start Kar Do (UI freeze nahi hoga)
+                        bool isSynced = await GoogleSyncService.syncToSheet(widget.vehicleEntry);
+
+                        // 5. Sync ka result user ko SnackBar me batao
                         if (context.mounted) {
-                          Navigator.pop(context);
-                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(isSynced
+                                  ? 'Successfully Synced to Google Sheet!'
+                                  : 'Saved locally. Sync failed (No internet).'),
+                              backgroundColor: isSynced ? Colors.green : Colors.red,
+                            ),
+                          );
                         }
                       } : null,
                       child: const Text('Submit & Complete', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -1515,8 +1513,33 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                                     final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
                                     hiveBox.flush();
                                   });
+                                  // UNDO FEATURE ADDED HERE
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('${box.consignmentNo} Trash me bhej diya gaya!')),
+                                    SnackBar(
+                                      content: Text('${box.consignmentNo} Trash me bhej diya gaya!'),
+                                      duration: const Duration(seconds: 4), // 4 seconds tak rahega
+                                      action: SnackBarAction(
+                                        label: 'UNDO',
+                                        textColor: Colors.yellow,
+                                        onPressed: () {
+                                          // Wapas active kar do
+                                          setState(() {
+                                            box.isDeleted = false;
+                                            final idx = widget.vehicleEntry.boxes.indexOf(box);
+                                            if (idx != -1) {
+                                              widget.vehicleEntry.boxes[idx] = box;
+                                            }
+                                            widget.vehicleEntry.lastEditedAt = DateTime.now();
+                                            widget.vehicleEntry.save();
+                                            final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
+                                            hiveBox.flush();
+                                          });
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('${box.consignmentNo} wapas restore ho gaya!')),
+                                          );
+                                        },
+                                      ),
+                                    ),
                                   );
                                 },
                               ),

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:image/image.dart' as img; // Naya Import for Compression
 import '../models/vehicle_entry.dart';
 
 class ExportService {
@@ -92,14 +93,24 @@ class ExportService {
     await Share.shareXFiles([XFile(imageFile.path)], text: 'Transport Slip - $vehicleNumber');
   }
 
-  // Helper: Images load karne ke liye
+  // PRO FIX: Image ko compress karke RAM bachane wala function
   static Future<List<pw.MemoryImage>> _loadImages(List<String> paths) async {
     List<pw.MemoryImage> images = [];
     for (var path in paths) {
       final file = File(path);
       if (await file.exists()) {
         final bytes = await file.readAsBytes();
-        images.add(pw.MemoryImage(bytes));
+
+        // Image decode karo
+        final decodedImage = img.decodeImage(bytes);
+        if (decodedImage != null) {
+          // Image ko 800px width tak resize karo (aspect ratio maintain karte hue)
+          final resized = img.copyResize(decodedImage, width: 800);
+          // JPG me compress karo with 70% quality
+          final compressedBytes = img.encodeJpg(resized, quality: 70);
+
+          images.add(pw.MemoryImage(compressedBytes));
+        }
       }
     }
     return images;
@@ -132,7 +143,6 @@ class ExportService {
                 )
             ),
             pw.SizedBox(height: 20),
-            // Naya: Infographic Summary Section
             pw.Container(
                 padding: pw.EdgeInsets.all(10),
                 decoration: pw.BoxDecoration(
@@ -147,7 +157,6 @@ class ExportService {
                       pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                           children: [
-                            // Total Boxes (Blue)
                             pw.Container(
                                 padding: pw.EdgeInsets.all(8),
                                 decoration: pw.BoxDecoration(color: PdfColors.blue100, borderRadius: pw.BorderRadius.circular(5)),
@@ -158,7 +167,6 @@ class ExportService {
                                     ]
                                 )
                             ),
-                            // Total Shortage (Orange)
                             pw.Container(
                                 padding: pw.EdgeInsets.all(8),
                                 decoration: pw.BoxDecoration(color: PdfColors.orange100, borderRadius: pw.BorderRadius.circular(5)),
@@ -169,7 +177,6 @@ class ExportService {
                                     ]
                                 )
                             ),
-                            // Total Extra (Purple)
                             pw.Container(
                                 padding: pw.EdgeInsets.all(8),
                                 decoration: pw.BoxDecoration(color: PdfColors.purple100, borderRadius: pw.BorderRadius.circular(5)),
@@ -180,7 +187,6 @@ class ExportService {
                                     ]
                                 )
                             ),
-                            // Total Damaged (Red)
                             pw.Container(
                                 padding: pw.EdgeInsets.all(8),
                                 decoration: pw.BoxDecoration(color: PdfColors.red100, borderRadius: pw.BorderRadius.circular(5)),

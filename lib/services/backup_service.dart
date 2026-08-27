@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import '../models/vehicle_entry.dart'; // Ye line pichli baar miss ho gayi thi
+import '../models/vehicle_entry.dart';
 
 class BackupService {
   Future<void> exportData() async {
@@ -37,14 +37,19 @@ class BackupService {
         final jsonString = await file.readAsString();
         final List<dynamic> jsonList = jsonDecode(jsonString);
 
-        final box = Hive.box<VehicleEntry>('vehicle_entries');
-
-        await box.clear();
-
+        // PRO FIX: Pehle saara data ek temporary list me load aur parse karo
+        final List<VehicleEntry> parsedEntries = [];
         for (var item in jsonList) {
           final entry = VehicleEntry.fromJson(item as Map<String, dynamic>);
-          await box.add(entry);
+          parsedEntries.add(entry);
         }
+
+        // Agar parsing 100% successful raha, tabhi purana data delete karo
+        final box = Hive.box<VehicleEntry>('vehicle_entries');
+        await box.clear();
+
+        // Naya data add karo
+        await box.addAll(parsedEntries);
 
         if (!context.mounted) return;
 

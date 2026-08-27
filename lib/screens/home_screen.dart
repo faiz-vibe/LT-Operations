@@ -1,11 +1,13 @@
-import 'package:flutter/material.dart' show Align, Alignment, AppBar, BorderRadius, BorderSide, BoxDecoration, BoxShape, BuildContext, Card, Center, Colors, Column, Container, CrossAxisAlignment, DismissDirection, Dismissible, Divider, Drawer, DrawerHeader, EdgeInsets, Expanded, FloatingActionButton, FocusManager, FocusNode, FontStyle, FontWeight, GestureDetector, GlobalKey, HitTestBehavior, Icon, IconButton, Icons, InputDecoration, Key, ListTile, ListView, MainAxisAlignment, MaterialPageRoute, Navigator, OutlineInputBorder, Padding, RoundedRectangleBorder, Row, Scaffold, ScaffoldMessenger, ScaffoldState, SizedBox, SnackBar, State, StatefulWidget, Text, TextAlign, TextEditingController, TextField, TextStyle, ValueListenableBuilder, Widget;
+import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/vehicle_entry.dart';
+import '../models/box_item.dart'; // Naya Import
 import 'vehicle_entry_screen.dart';
 import 'consignment_screen.dart';
+import 'barcode_scanner_screen.dart'; // Naya Import
 import 'trash_screen.dart';
 import 'manage_suggestions_screen.dart';
-import 'reports_screen.dart'; // Naya Import
+import 'reports_screen.dart';
 import '../services/backup_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -56,6 +58,81 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // PRO FEATURE: Global Barcode Search Logic
+  Future<void> _scanAndFindParcel() async {
+    _searchFocusNode.unfocus();
+    final scannedCode = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+    );
+
+    if (scannedCode == null || scannedCode.isEmpty) return;
+
+    final box = Hive.box<VehicleEntry>('vehicle_entries');
+    VehicleEntry? foundEntry;
+    BoxItem? foundBox;
+
+    for (var entry in box.values) {
+      if (entry.isDeleted) continue;
+      for (var b in entry.boxes) {
+        if (b.consignmentNo.toUpperCase() == scannedCode.toUpperCase()) {
+          foundEntry = entry;
+          foundBox = b;
+          break;
+        }
+      }
+      if (foundEntry != null) break;
+    }
+
+    if (foundEntry != null && foundBox != null) {
+      showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Parcel Found!'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Consignment: ${foundBox!.consignmentNo}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('Company: ${foundBox.companyName}'),
+              Text('Vehicle: ${foundEntry!.vehicleNumber}'),
+              Text('Driver: ${foundEntry.driverName}'),
+              const SizedBox(height: 8),
+              Text(
+                  'Received: ${foundBox.receivedBoxes} | Expected: ${foundBox.expectedBoxes}',
+                  style: TextStyle(
+                      color: foundBox.shortage > 0 ? Colors.red : Colors.green,
+                      fontWeight: FontWeight.bold
+                  )
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Close'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _navigateToConsignment(foundEntry!);
+              },
+              child: const Text('Open Vehicle'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Parcel $scannedCode kisi bhi vehicle me nahi mila!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder(
@@ -100,6 +177,14 @@ class _HomeScreenState extends State<HomeScreen> {
             title: const Text('Transport Supervisor', style: TextStyle(fontWeight: FontWeight.bold)),
             backgroundColor: Colors.blue[800],
             foregroundColor: Colors.white,
+            actions: [
+              // Global Barcode Search Icon
+              IconButton(
+                icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
+                tooltip: 'Scan & Find Parcel',
+                onPressed: _scanAndFindParcel,
+              ),
+            ],
           ),
           drawer: Drawer(
             child: ListView(
@@ -169,7 +254,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const ManageSuggestionsScreen()));
                   },
                 ),
-                // Naya: Reports & Analytics Link
                 ListTile(
                   leading: Icon(Icons.bar_chart, color: Colors.green[800]),
                   title: const Text('Reports & Analytics'),
