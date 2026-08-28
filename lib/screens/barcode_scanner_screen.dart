@@ -12,13 +12,47 @@ class BarcodeScannerScreen extends StatefulWidget {
 
 class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   bool _isDetected = false;
-  // Camera controller ko global banaya taaki torch aur gallery control kar sakein
   final MobileScannerController _controller = MobileScannerController();
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  // Manual Entry Dialog
+  Future<void> _showManualEntryDialog() async {
+    String manualCode = '';
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Enter Docket Number'),
+        content: TextField(
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(
+            hintText: 'Type Consignment / LR No',
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (val) => manualCode = val,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (manualCode.trim().isNotEmpty) {
+                Navigator.pop(dialogContext);
+                Navigator.pop(context, manualCode.trim().toUpperCase()); // Scanner screen se value return karo
+              }
+            },
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -29,12 +63,10 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
         actions: [
-          // Torch (Flashlight) Toggle Button
           IconButton(
             icon: ValueListenableBuilder(
               valueListenable: _controller.torchState,
               builder: (context, state, child) {
-                // Agar torch on hai toh yellow icon, warna white
                 if (state == TorchState.on) {
                   return const Icon(Icons.flash_on, color: Colors.yellow);
                 }
@@ -53,8 +85,6 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               final List<Barcode> barcodes = capture.barcodes;
               if (barcodes.isNotEmpty && !_isDetected) {
                 _isDetected = true; // Lock laga do
-
-                // Phone vibrate kare (Haptic feedback)
                 HapticFeedback.mediumImpact();
 
                 final String? code = barcodes.first.rawValue;
@@ -67,36 +97,51 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             },
           ),
 
-          // Gallery se Scan karne ka button (Bottom Center me)
+          // Bottom me Gallery aur Manual Entry buttons
           Align(
             alignment: Alignment.bottomCenter,
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 30),
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.photo_library, color: Colors.white),
-                label: const Text('Scan from Gallery', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[800],
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                ),
-                onPressed: () async {
-                  final ImagePicker picker = ImagePicker();
-                  // Gallery se image select karein
-                  final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+              padding: const EdgeInsets.only(bottom: 30, left: 16, right: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Naya: Manual Entry Button
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.keyboard, color: Colors.white),
+                    label: const Text('Manual Entry (No Barcode)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange[800],
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    ),
+                    onPressed: _showManualEntryDialog,
+                  ),
+                  const SizedBox(height: 12),
+                  // Gallery Button
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.photo_library, color: Colors.white),
+                    label: const Text('Scan from Gallery', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[800],
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    ),
+                    onPressed: () async {
+                      final ImagePicker picker = ImagePicker();
+                      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
-                  if (image != null) {
-                    // Image me barcode search karein
-                    final bool success = await _controller.analyzeImage(image.path);
+                      if (image != null) {
+                        final bool success = await _controller.analyzeImage(image.path);
 
-                    // Agar image me barcode nahi mila
-                    if (success != true && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Is image me koi barcode nahi mila.')),
-                      );
-                    }
-                  }
-                },
+                        if (success != true && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Is image me koi barcode nahi mila.')),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                ],
               ),
             ),
           ),

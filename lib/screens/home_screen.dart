@@ -1,13 +1,15 @@
+import 'dart:async'; // Naya Import for Timer
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/vehicle_entry.dart';
-import '../models/box_item.dart'; // Naya Import
+import '../models/box_item.dart';
 import 'vehicle_entry_screen.dart';
 import 'consignment_screen.dart';
-import 'barcode_scanner_screen.dart'; // Naya Import
+import 'barcode_scanner_screen.dart';
 import 'trash_screen.dart';
 import 'manage_suggestions_screen.dart';
 import 'reports_screen.dart';
+import 'sticker_generator_screen.dart';
 import '../services/backup_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -23,11 +25,39 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final FocusNode _searchFocusNode = FocusNode();
 
+  // PRO FEATURE: Timer for Live TAT update
+  Timer? _tatTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Har 60 second me screen refresh karo taaki timer update ho
+    _tatTimer = Timer.periodic(const Duration(seconds: 60), (Timer t) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _tatTimer?.cancel(); // Timer band kar do screen chhodte time
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  // PRO FEATURE: Duration calculate karne ka logic
+  String _getTatDuration(DateTime entryDate) {
+    final duration = DateTime.now().difference(entryDate);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+
+    if (hours > 0) {
+      return "${hours}h ${minutes}m";
+    } else {
+      return "${minutes}m";
+    }
   }
 
   Future<void> _navigateToEntry({VehicleEntry? existingEntry}) async {
@@ -58,7 +88,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // PRO FEATURE: Global Barcode Search Logic
   Future<void> _scanAndFindParcel() async {
     _searchFocusNode.unfocus();
     final scannedCode = await Navigator.push<String>(
@@ -178,7 +207,6 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: Colors.blue[800],
             foregroundColor: Colors.white,
             actions: [
-              // Global Barcode Search Icon
               IconButton(
                 icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
                 tooltip: 'Scan & Find Parcel',
@@ -261,6 +289,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportsScreen()));
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.qr_code_2, color: Colors.teal[800]),
+                  title: const Text('Generate Stickers'),
+                  subtitle: const Text('Print barcode stickers for boxes'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const StickerGeneratorScreen()));
                   },
                 ),
               ],
@@ -371,6 +408,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     itemCount: entries.length,
                     itemBuilder: (context, index) {
                       final entry = entries[index];
+
+                      // PRO FEATURE: TAT Logic
+                      final isTatExceeded = !entry.isCompleted && DateTime.now().difference(entry.entryDate).inHours >= 2;
+                      final tatDuration = _getTatDuration(entry.entryDate);
+
                       return Dismissible(
                         key: Key(entry.key.toString()),
                         direction: DismissDirection.endToStart,
@@ -394,7 +436,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                             side: BorderSide(
-                              color: entry.isCompleted ? Colors.transparent : Colors.orange,
+                              // PRO FEATURE: Agar TAT exceed hua to card border Red
+                              color: entry.isCompleted ? Colors.transparent : (isTatExceeded ? Colors.red : Colors.orange),
                               width: 1.5,
                             ),
                           ),
@@ -439,6 +482,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                       color: (entry.totalShortage > 0 || entry.totalDamaged > 0) ? Colors.red : (entry.totalExtra > 0 ? Colors.blue : Colors.green),
                                       fontWeight: FontWeight.w500
                                   ),
+                                ),
+                                // PRO FEATURE: TAT Display UI
+                                Row(
+                                  children: [
+                                    Icon(Icons.timer, size: 14, color: isTatExceeded ? Colors.red : Colors.grey),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'TAT: $tatDuration',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isTatExceeded ? Colors.red : Colors.grey,
+                                        fontWeight: isTatExceeded ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 Text(
                                   'Created: ${entry.entryDate.day}/${entry.entryDate.month}/${entry.entryDate.year}  ${entry.entryDate.hour.toString().padLeft(2, '0')}:${entry.entryDate.minute.toString().padLeft(2, '0')}',

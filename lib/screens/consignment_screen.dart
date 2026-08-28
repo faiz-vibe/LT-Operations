@@ -13,6 +13,7 @@ import '../services/media_service.dart';
 import 'barcode_scanner_screen.dart';
 import 'vehicle_entry_screen.dart';
 import 'vehicle_media_gallery_screen.dart';
+import 'bulk_scan_screen.dart';
 
 class ConsignmentScreen extends StatefulWidget {
   final VehicleEntry vehicleEntry;
@@ -783,6 +784,17 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     );
   }
 
+  Future<void> _openBulkScan() async {
+    _boxSearchFocusNode.unfocus();
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BulkScanScreen(vehicleEntry: widget.vehicleEntry),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
   void _showTrashForThisVehicle() {
     _boxSearchFocusNode.unfocus();
 
@@ -1210,6 +1222,12 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
         backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
         actions: [
+          // Naya: Bulk Scan Button
+          IconButton(
+            icon: const Icon(Icons.document_scanner, color: Colors.white),
+            tooltip: 'Bulk Scan Boxes',
+            onPressed: _openBulkScan,
+          ),
           IconButton(
             icon: const Icon(Icons.ios_share, color: Colors.white),
             tooltip: 'Export & Share',
