@@ -13,6 +13,7 @@ import '../services/media_service.dart';
 import 'barcode_scanner_screen.dart';
 import 'vehicle_entry_screen.dart';
 import 'vehicle_media_gallery_screen.dart';
+import 'package:flutter/services.dart';
 import 'bulk_scan_screen.dart';
 
 class ConsignmentScreen extends StatefulWidget {
@@ -214,9 +215,14 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                           child: TextField(
                             controller: _consignmentController,
                             textInputAction: TextInputAction.next,
+                            keyboardType: TextInputType.number, // Sirf number keyboard khulega
+                            inputFormatters: [
+                              // Letters block kar do, sirf numbers, hyphen aur space allow karo
+                              FilteringTextInputFormatter.deny(RegExp(r'[a-zA-Z]')),
+                            ],
                             onSubmitted: (_) => _companyFocusNode.requestFocus(),
                             decoration: const InputDecoration(
-                              labelText: 'Consignment/Product No',
+                              labelText: 'Docket Number (e.g., 100012312 - 1)',
                               border: OutlineInputBorder(),
                               prefixIcon: Icon(Icons.inventory),
                             ),

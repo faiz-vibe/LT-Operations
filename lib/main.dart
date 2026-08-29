@@ -40,13 +40,81 @@ class TransportSupervisorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Transport Supervisor',
+      title: 'LT Operations',
       debugShowCheckedModeBanner: false,
+      // PRO THEME: Modern Material 3 setup with Let's Transport Orange
       theme: ThemeData(
-        primarySwatch: Colors.blue,
         useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFE65100), // Deep Orange (Brand Color)
+          primary: const Color(0xFFE65100),
+          secondary: const Color(0xFFFF8F00), // Amber for accents
+          surface: const Color(0xFFFFF8F1),   // Warm Light background
+        ),
+        scaffoldBackgroundColor: const Color(0xFFFFF8F1), // Very light warm white
+        fontFamily: 'Roboto', // Or your preferred font
+
+        // AppBar ko clean aur modern banaya with Brand Color
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFE65100), // Deep Orange
+          foregroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: false,
+          titleTextStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.white),
+        ),
+
+        // Cards ke liye soft shadows aur rounded corners
+        cardTheme: CardTheme(
+          elevation: 2,
+          shadowColor: Colors.black.withOpacity(0.08),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16.0),
+          ),
+          margin: EdgeInsets.zero,
+          color: Colors.white,
+        ),
+
+        // Saare TextFields ko ekdum premium aur rounded banaya
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.0),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.0),
+            borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.0),
+            borderSide: const BorderSide(color: Color(0xFFE65100), width: 2), // Focus orange
+          ),
+        ),
+
+        // Buttons ko modern aur rounded banaya with Brand Color
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFE65100), // Deep Orange
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12.0),
+            ),
+            textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            elevation: 2,
+          ),
+        ),
+
+        // Text styles for better readability
+        textTheme: const TextTheme(
+          headlineSmall: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE65100)),
+          titleLarge: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+          bodyMedium: TextStyle(color: Colors.black54),
+        ),
       ),
-      home: const HomeScreen(), // Yahan HomeScreen set kiya hai
+      home: const HomeScreen(),
     );
   }
 }

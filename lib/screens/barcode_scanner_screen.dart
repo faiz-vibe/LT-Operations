@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:flutter/services.dart';
@@ -29,9 +30,12 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         title: const Text('Enter Docket Number'),
         content: TextField(
           autofocus: true,
-          textCapitalization: TextCapitalization.characters,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.deny(RegExp(r'[a-zA-Z]')),
+          ],
           decoration: const InputDecoration(
-            hintText: 'Type Consignment / LR No',
+            hintText: 'Type Docket Number',
             border: OutlineInputBorder(),
           ),
           onChanged: (val) => manualCode = val,
