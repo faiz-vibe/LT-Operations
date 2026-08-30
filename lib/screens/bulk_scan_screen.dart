@@ -31,7 +31,7 @@ class _BulkScanScreenState extends State<BulkScanScreen> {
     if (barcodes.isNotEmpty) {
       final String? code = barcodes.first.rawValue;
       if (code != null && code.isNotEmpty) {
-        _isProcessing = true; // Lock laga do taaki rapid double scan na ho
+        _isProcessing = true; // Lock laga do
 
         if (_codeSet.contains(code)) {
           // Duplicate scan detected
@@ -62,7 +62,6 @@ class _BulkScanScreenState extends State<BulkScanScreen> {
 
   void _saveAndFinish() {
     for (String code in _scannedCodes) {
-      // DB me check karo agar already exist toh nahi karta
       bool exists = widget.vehicleEntry.boxes.any((b) => b.consignmentNo == code);
       if (!exists) {
         final box = BoxItem(
@@ -86,7 +85,7 @@ class _BulkScanScreenState extends State<BulkScanScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Bulk Scan Mode'),
-        backgroundColor: Colors.blue[800],
+        backgroundColor: const Color(0xFFD84315), // Corporate Orange
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -117,7 +116,7 @@ class _BulkScanScreenState extends State<BulkScanScreen> {
           Expanded(
             flex: 3,
             child: Container(
-              color: Colors.grey[100],
+              color: Colors.grey[100], // Light background for list
               child: Column(
                 children: [
                   Padding(
@@ -125,7 +124,7 @@ class _BulkScanScreenState extends State<BulkScanScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Scanned: ${_scannedCodes.length} Boxes', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text('Scanned: ${_scannedCodes.length} Boxes', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFD84315))),
                         if (_scannedCodes.isNotEmpty)
                           TextButton(
                             onPressed: () {
@@ -148,7 +147,7 @@ class _BulkScanScreenState extends State<BulkScanScreen> {
                       itemBuilder: (context, index) {
                         return ListTile(
                           leading: const Icon(Icons.check_circle, color: Colors.green),
-                          title: Text(_scannedCodes[index]),
+                          title: Text(_scannedCodes[index], style: const TextStyle(fontWeight: FontWeight.w500)),
                         );
                       },
                     ),
@@ -160,8 +159,10 @@ class _BulkScanScreenState extends State<BulkScanScreen> {
                       height: 50,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green[800],
+                          backgroundColor: const Color(0xFFD84315), // Corporate Orange
                           foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 1,
                         ),
                         onPressed: _scannedCodes.isEmpty ? null : _saveAndFinish,
                         child: const Text('Save & Finish', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),

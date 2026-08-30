@@ -15,7 +15,7 @@
     <application
         android:label="LT Operations"
         android:name="${applicationName}"
-        android:icon="@drawable/ic_launcher_foreground"
+        android:icon="@mipmap/launcher_icon"
         tools:ignore="UnknownAttributeInManifest">
 
         <activity

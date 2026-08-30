@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import '../models/vehicle_entry.dart';
 import '../models/box_item.dart';
-import '../services/media_service.dart'; // Naya Import
+import '../services/media_service.dart';
 
 class VehicleMediaGalleryScreen extends StatefulWidget {
   final VehicleEntry vehicleEntry;
@@ -24,7 +24,6 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
     _entry = widget.vehicleEntry;
   }
 
-  // Full Screen View (Zoomable)
   void _viewPhoto(String path) {
     showDialog(
       context: context,
@@ -40,7 +39,6 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
     );
   }
 
-  // Photo Delete Logic (Null-Safe)
   void _deletePhoto(String category, int index, BoxItem? boxItem) {
     setState(() {
       if (category == 'Start') {
@@ -62,12 +60,9 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
     });
   }
 
-  // Photo Replace Logic (Null-Safe)
   Future<void> _replacePhoto(String category, int index, BoxItem? boxItem) async {
     final XFile? photo = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
     if (photo == null) return;
-
-    // MediaService ka use kiya gaya hai
     final newPath = await MediaService.saveImagePermanently(photo.path);
 
     setState(() {
@@ -90,12 +85,9 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
     });
   }
 
-  // Add Photo Logic
   Future<void> _addPhoto(String category) async {
     final XFile? photo = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
     if (photo == null) return;
-
-    // MediaService ka use kiya gaya hai
     final newPath = await MediaService.saveImagePermanently(photo.path);
 
     setState(() {
@@ -115,7 +107,6 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
     });
   }
 
-  // Damage photo add karne ke liye consignment select karne ka dialog
   void _showAddDamagePhotoDialog(String newPath) {
     final activeBoxes = _entry.boxes.where((b) => !b.isDeleted && b.consignmentNo.isNotEmpty).toList();
     if (activeBoxes.isEmpty) {
@@ -132,6 +123,7 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
           return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: const Text('Select Consignment'),
             content: DropdownButton<BoxItem>(
               value: selectedBox,
@@ -142,6 +134,7 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
               ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD84315)),
                 onPressed: () {
                   if (selectedBox != null) {
                     setState(() {
@@ -165,8 +158,6 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
   @override
   Widget build(BuildContext context) {
     final activeBoxes = _entry.boxes.where((b) => !b.isDeleted && b.consignmentNo.isNotEmpty).toList();
-
-    // Calculate total damage photos safely
     int totalDamagePhotos = 0;
     for (var b in activeBoxes) {
       totalDamagePhotos += b.damagePhotos.length;
@@ -174,8 +165,8 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Vehicle Media Gallery', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.blue[800],
+        title: const Text('Vehicle Media Gallery'),
+        backgroundColor: const Color(0xFFD84315), // Corporate Orange
         foregroundColor: Colors.white,
       ),
       body: ListView(
@@ -191,7 +182,6 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
     );
   }
 
-  // Section Builder (Start & End)
   Widget _buildSection(String title, List<String> photos, String category) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,12 +189,12 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFD84315))),
             ElevatedButton.icon(
               onPressed: () => _addPhoto(category),
               icon: const Icon(Icons.add_a_photo, size: 18),
               label: const Text('Add'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD84315), foregroundColor: Colors.white),
             ),
           ],
         ),
@@ -233,7 +223,6 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
     );
   }
 
-  // Damage Section Builder
   Widget _buildDamageSection(String title, List<BoxItem> activeBoxes, int totalPhotos) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,7 +230,7 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFD84315))),
             ElevatedButton.icon(
               onPressed: () => _addPhoto('Damage'),
               icon: const Icon(Icons.add_a_photo, size: 18),
@@ -284,7 +273,6 @@ class _VehicleMediaGalleryScreenState extends State<VehicleMediaGalleryScreen> {
     );
   }
 
-  // Photo Tile Widget
   Widget _buildPhotoTile(String path, String category, int index, BoxItem? boxItem, {String? consignmentNo}) {
     return Stack(
       children: [

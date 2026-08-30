@@ -56,14 +56,14 @@ dev_dependencies:
 # App Icon Generator Configuration
 flutter_launcher_icons:
   android: "launcher_icon"
-  image_path: "assets/letstransport_logo.jpeg"
+  image_path: "assets/letstransport_logo.png"
   ios: true
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/letstransport_logo.jpeg"
+  adaptive_icon_foreground: "assets/letstransport_logo.png"
 
 flutter:
   uses-material-design: true
 
   # App me use hone wali images
   assets:
-    - assets/letstransport_logo.jpeg
+    - assets/letstransport_logo.png

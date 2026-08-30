@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
@@ -20,10 +21,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
   bool _isNewEntry = false;
   bool _skippedStartPhotos = false;
   late String _selectedStatus;
-
-  // Pro FocusNodes for perfect keyboard navigation
-  final FocusNode _driverNameFocusNode = FocusNode();
-  final FocusNode _driverMobileFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -53,9 +50,6 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
 
   @override
   void dispose() {
-    _driverNameFocusNode.dispose();
-    _driverMobileFocusNode.dispose();
-
     if (_isNewEntry) {
       bool isEmpty = _currentEntry.vehicleNumber.trim().isEmpty &&
           _currentEntry.driverName.trim().isEmpty &&
@@ -141,7 +135,7 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vehicle & Driver Details', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.blue[800],
+        backgroundColor: const Color(0xFFD84315), // Corporate Orange
         foregroundColor: Colors.white,
       ),
       body: GestureDetector(
@@ -151,305 +145,315 @@ class _VehicleEntryScreenState extends State<VehicleEntryScreen> {
         behavior: HitTestBehavior.opaque,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Auto-save is ON',
-                style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
+          // PRO UI: Floating Form Card
+          child: Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: const Color(0xFFD84315), size: 20),
+                      const SizedBox(width: 8),
+                      const Text('Auto-save is ON', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
 
-              // 1. Vehicle Number (Next -> Driver Name)
-              Autocomplete<String>(
-                initialValue: TextEditingValue(text: _currentEntry.vehicleNumber),
-                fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                  return TextField(
-                    controller: controller,
-                    focusNode: focusNode,
-                    onEditingComplete: onEditingComplete,
-                    textCapitalization: TextCapitalization.characters,
-                    textInputAction: TextInputAction.next,
-                    onSubmitted: (_) => _driverNameFocusNode.requestFocus(),
-                    onChanged: (val) {
-                      _currentEntry.vehicleNumber = val.toUpperCase();
-                      _currentEntry.save();
+                  // 1. Vehicle Number
+                  Autocomplete<String>(
+                    initialValue: TextEditingValue(text: _currentEntry.vehicleNumber),
+                    fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                      return TextField(
+                        controller: controller,
+                        focusNode: focusNode, // Using framework's focusNode
+                        onEditingComplete: onEditingComplete,
+                        textCapitalization: TextCapitalization.characters,
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) => FocusScope.of(context).nextFocus(), // Move to next
+                        onChanged: (val) {
+                          _currentEntry.vehicleNumber = val.toUpperCase();
+                          _currentEntry.save();
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Vehicle Number',
+                          hintText: 'Write Vehicle Number',
+                          prefixIcon: Icon(Icons.local_shipping),
+                        ),
+                      );
                     },
-                    decoration: const InputDecoration(
-                      labelText: 'Vehicle Number',
-                      hintText: 'Write Vehicle Number',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.local_shipping),
-                    ),
-                  );
-                },
-                optionsBuilder: (TextEditingValue textEditingValue) {
-                  if (textEditingValue.text.isEmpty) return const Iterable<String>.empty();
-                  final box = Hive.box<String>('vehicles');
-                  return box.values.where((v) => v.toLowerCase().contains(textEditingValue.text.toLowerCase()));
-                },
-                onSelected: (String selection) {
-                  _currentEntry.vehicleNumber = selection.toUpperCase();
-                  _currentEntry.save();
-                  _driverNameFocusNode.requestFocus();
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // 2. Driver Name (Next -> Driver Mobile)
-              Autocomplete<String>(
-                initialValue: TextEditingValue(text: _currentEntry.driverName),
-                fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                  // Apna FocusNode set kiya gaya hai
-                  focusNode = _driverNameFocusNode;
-                  return TextField(
-                    controller: controller,
-                    focusNode: focusNode,
-                    onEditingComplete: onEditingComplete,
-                    textCapitalization: TextCapitalization.words,
-                    textInputAction: TextInputAction.next,
-                    onSubmitted: (_) => _driverMobileFocusNode.requestFocus(),
-                    onChanged: (val) {
-                      _currentEntry.driverName = val;
-                      _currentEntry.save();
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) return const Iterable<String>.empty();
+                      final box = Hive.box<String>('vehicles');
+                      return box.values.where((v) => v.toLowerCase().contains(textEditingValue.text.toLowerCase()));
                     },
-                    decoration: const InputDecoration(
-                      labelText: 'Driver Name',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.person),
-                    ),
-                  );
-                },
-                optionsBuilder: (TextEditingValue textEditingValue) {
-                  if (textEditingValue.text.isEmpty) return const Iterable<String>.empty();
-                  final box = Hive.box<String>('drivers');
-                  return box.values.where((d) => d.toLowerCase().contains(textEditingValue.text.toLowerCase()));
-                },
-                onSelected: (String selection) {
-                  _currentEntry.driverName = selection;
-                  _currentEntry.save();
-                  _driverMobileFocusNode.requestFocus();
-                },
-              ),
-              const SizedBox(height: 16),
+                    onSelected: (String selection) {
+                      _currentEntry.vehicleNumber = selection.toUpperCase();
+                      _currentEntry.save();
+                      FocusScope.of(context).nextFocus(); // Move to next field
+                    },
+                  ),
+                  const SizedBox(height: 16),
 
-              // 3. Driver Mobile (Done/Tick -> Auto Proceed/Save)
-              Autocomplete<String>(
-                initialValue: TextEditingValue(text: _currentEntry.driverMobile),
-                fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                  focusNode = _driverMobileFocusNode;
-                  return TextField(
-                    controller: controller,
-                    focusNode: focusNode,
-                    onEditingComplete: onEditingComplete,
-                    keyboardType: TextInputType.phone,
-                    textInputAction: TextInputAction.done, // Yahan Tick (Done) aayega
-                    onSubmitted: (_) {
+                  // 2. Driver Name
+                  Autocomplete<String>(
+                    initialValue: TextEditingValue(text: _currentEntry.driverName),
+                    fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                      return TextField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        onEditingComplete: onEditingComplete,
+                        textCapitalization: TextCapitalization.words,
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                        onChanged: (val) {
+                          _currentEntry.driverName = val;
+                          _currentEntry.save();
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Driver Name',
+                          prefixIcon: Icon(Icons.person),
+                        ),
+                      );
+                    },
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) return const Iterable<String>.empty();
+                      final box = Hive.box<String>('drivers');
+                      return box.values.where((d) => d.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                    },
+                    onSelected: (String selection) {
+                      _currentEntry.driverName = selection;
+                      _currentEntry.save();
+                      FocusScope.of(context).nextFocus();
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 3. Driver Mobile
+                  Autocomplete<String>(
+                    initialValue: TextEditingValue(text: _currentEntry.driverMobile),
+                    fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                      return TextField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        onEditingComplete: onEditingComplete,
+                        keyboardType: TextInputType.phone,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) {
+                          FocusScope.of(context).unfocus();
+                          _proceedOrSave();
+                        },
+                        onChanged: (val) {
+                          _currentEntry.driverMobile = val;
+                          _currentEntry.save();
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Driver Mobile Number',
+                          prefixIcon: Icon(Icons.phone),
+                        ),
+                      );
+                    },
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) return const Iterable<String>.empty();
+                      final box = Hive.box<String>('driver_mobiles');
+                      return box.values.where((m) => m.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                    },
+                    onSelected: (String selection) {
+                      _currentEntry.driverMobile = selection;
+                      _currentEntry.save();
                       FocusScope.of(context).unfocus();
-                      _proceedOrSave(); // Tick dabate hi save/proceed ho jayega
                     },
-                    onChanged: (val) {
-                      _currentEntry.driverMobile = val;
-                      _currentEntry.save();
-                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 4. Status Dropdown
+                  DropdownButtonFormField<String>(
+                    value: _selectedStatus,
                     decoration: const InputDecoration(
-                      labelText: 'Driver Mobile Number',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.phone),
+                      labelText: 'Loading / Unloading',
+                      prefixIcon: Icon(Icons.sync_alt),
                     ),
-                  );
-                },
-                optionsBuilder: (TextEditingValue textEditingValue) {
-                  if (textEditingValue.text.isEmpty) return const Iterable<String>.empty();
-                  final box = Hive.box<String>('driver_mobiles');
-                  return box.values.where((m) => m.toLowerCase().contains(textEditingValue.text.toLowerCase()));
-                },
-                onSelected: (String selection) {
-                  _currentEntry.driverMobile = selection;
-                  _currentEntry.save();
-                  FocusScope.of(context).unfocus();
-                },
-              ),
-              const SizedBox(height: 16),
+                    items: const [
+                      DropdownMenuItem(value: 'Loading', child: Text('Loading')),
+                      DropdownMenuItem(value: 'Unloading', child: Text('Unloading')),
+                    ],
+                    onChanged: (val) {
+                      FocusScope.of(context).unfocus();
+                      setState(() {
+                        _selectedStatus = val!;
+                        _currentEntry.vehicleStatus = val;
+                        _currentEntry.startPhotos = [];
+                        _skippedStartPhotos = false;
+                        _currentEntry.save();
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
 
-              DropdownButtonFormField<String>(
-                value: _selectedStatus,
-                decoration: const InputDecoration(
-                  labelText: 'Loading / Unloading',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.sync_alt),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'Loading', child: Text('Loading')),
-                  DropdownMenuItem(value: 'Unloading', child: Text('Unloading')),
-                ],
-                onChanged: (val) {
-                  FocusScope.of(context).unfocus();
-                  setState(() {
-                    _selectedStatus = val!;
-                    _currentEntry.vehicleStatus = val;
-                    _currentEntry.startPhotos = [];
-                    _skippedStartPhotos = false;
-                    _currentEntry.save();
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
+                  // 5. Gate Dropdown
+                  DropdownButtonFormField<String>(
+                    value: _currentEntry.gateNumber,
+                    decoration: const InputDecoration(
+                      labelText: 'Select Dock/Gate Number',
+                      prefixIcon: Icon(Icons.door_front_door),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Gate 1', child: Text('Gate 1')),
+                      DropdownMenuItem(value: 'Gate 2', child: Text('Gate 2')),
+                      DropdownMenuItem(value: 'Gate 3', child: Text('Gate 3')),
+                      DropdownMenuItem(value: 'Gate 4', child: Text('Gate 4')),
+                    ],
+                    onChanged: (val) {
+                      FocusScope.of(context).unfocus();
+                      setState(() {
+                        _currentEntry.gateNumber = val!;
+                        _currentEntry.save();
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 20),
 
-              DropdownButtonFormField<String>(
-                value: _currentEntry.gateNumber,
-                decoration: const InputDecoration(
-                  labelText: 'Select Dock/Gate Number',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.door_front_door),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'Gate 1', child: Text('Gate 1')),
-                  DropdownMenuItem(value: 'Gate 2', child: Text('Gate 2')),
-                  DropdownMenuItem(value: 'Gate 3', child: Text('Gate 3')),
-                  DropdownMenuItem(value: 'Gate 4', child: Text('Gate 4')),
-                ],
-                onChanged: (val) {
-                  FocusScope.of(context).unfocus();
-                  setState(() {
-                    _currentEntry.gateNumber = val!;
-                    _currentEntry.save();
-                  });
-                },
-              ),
-              const SizedBox(height: 20),
-
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: canProceed ? Colors.green : Colors.red, width: 1.5),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  // 6. Start Photos Section
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: canProceed ? Colors.green.shade200 : Colors.red.shade200, width: 1.5),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Start Photos (Zaruri)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        if (!canProceed)
-                          TextButton(
-                            onPressed: () {
-                              FocusScope.of(context).unfocus();
-                              setState(() {
-                                _skippedStartPhotos = true;
-                              });
-                            },
-                            child: const Text('Skip', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                          ),
-                        if (canProceed)
-                          const Padding(
-                            padding: EdgeInsets.only(right: 8.0),
-                            child: Icon(Icons.check_circle, color: Colors.green),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _selectedStatus == 'Unloading'
-                          ? '1. Seal Photo\n2. Gate Open Photo'
-                          : '1. Empty Vehicle Photo',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                    ),
-                    const SizedBox(height: 10),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            icon: const Icon(Icons.camera_alt, color: Colors.white),
-                            label: Text(
-                              _currentEntry.startPhotos.isEmpty ? 'Take Photo' : 'Add More',
-                              style: const TextStyle(color: Colors.white),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Start Photos (Zaruri)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            if (!canProceed)
+                              TextButton(
+                                onPressed: () {
+                                  FocusScope.of(context).unfocus();
+                                  setState(() {
+                                    _skippedStartPhotos = true;
+                                  });
+                                },
+                                child: const Text('Skip', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                              ),
+                            if (canProceed)
+                              const Padding(
+                                padding: EdgeInsets.only(right: 8.0),
+                                child: Icon(Icons.check_circle, color: Colors.green),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _selectedStatus == 'Unloading' ? '1. Seal Photo\n2. Gate Open Photo' : '1. Empty Vehicle Photo',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                icon: const Icon(Icons.camera_alt, color: Colors.white),
+                                label: Text(
+                                  _currentEntry.startPhotos.isEmpty ? 'Take Photo' : 'Add More',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD84315)),
+                                onPressed: _takeStartPhoto,
+                              ),
                             ),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800]),
-                            onPressed: _takeStartPhoto,
-                          ),
+                          ],
                         ),
+                        const SizedBox(height: 10),
+
+                        // PRO UI: Modern Rounded Photo Grid
+                        if (_currentEntry.startPhotos.isNotEmpty)
+                          SizedBox(
+                            height: 100,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _currentEntry.startPhotos.length,
+                              itemBuilder: (context, index) {
+                                return Stack(
+                                  children: [
+                                    Container(
+                                      margin: const EdgeInsets.only(right: 10),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        image: DecorationImage(
+                                          image: FileImage(File(_currentEntry.startPhotos[index])),
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                      width: 100,
+                                      height: 100,
+                                    ),
+                                    Positioned(
+                                      right: 2,
+                                      top: 2,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            final List<String> updatedPhotos = List<String>.from(_currentEntry.startPhotos);
+                                            updatedPhotos.removeAt(index);
+                                            _currentEntry.startPhotos = updatedPhotos;
+                                            _currentEntry.save();
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(0.6),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.close, size: 16, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                  ),
+                  const SizedBox(height: 30),
 
-                    if (_currentEntry.startPhotos.isNotEmpty)
-                      SizedBox(
-                        height: 90,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _currentEntry.startPhotos.length,
-                          itemBuilder: (context, index) {
-                            return Stack(
-                              children: [
-                                Container(
-                                  margin: const EdgeInsets.only(right: 8),
-                                  child: Image.file(
-                                    File(_currentEntry.startPhotos[index]),
-                                    width: 80,
-                                    height: 80,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                Positioned(
-                                  right: 0,
-                                  top: 0,
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        final List<String> updatedPhotos = List<String>.from(_currentEntry.startPhotos);
-                                        updatedPhotos.removeAt(index);
-                                        _currentEntry.startPhotos = updatedPhotos;
-                                        _currentEntry.save();
-                                      });
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.all(2),
-                                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                                      child: const Icon(Icons.close, size: 14, color: Colors.white),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
+                  // Proceed Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: canProceed ? const Color(0xFFD84315) : Colors.grey,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                  ],
-                ),
+                      onPressed: canProceed ? _proceedOrSave : null,
+                      child: Text(
+                          widget.existingEntry == null ? 'Next: Scan Boxes' : 'Update Details',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
+                      ),
+                    ),
+                  ),
+                  if (!canProceed)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        'Next button lock hai. Pehle Photos khinchye ya Skip dabayein.',
+                        style: TextStyle(fontSize: 12, color: Colors.red[700]),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
               ),
-
-              const SizedBox(height: 30),
-
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: canProceed ? Colors.blue[800] : Colors.grey,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onPressed: canProceed ? _proceedOrSave : null,
-                  child: Text(
-                      widget.existingEntry == null ? 'Next: Scan Boxes' : 'Update Details',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
-                  ),
-                ),
-              ),
-              if (!canProceed)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Text(
-                    'Next button lock hai. Pehle Photos khinchye ya Skip dabayein.',
-                    style: TextStyle(fontSize: 12, color: Colors.red[700]),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),

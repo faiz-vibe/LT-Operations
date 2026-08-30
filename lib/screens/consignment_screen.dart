@@ -1,5 +1,7 @@
+import 'zone_selection_screen.dart';
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Naya Import for Input Formatting
+import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 import 'dart:io';
 import 'package:screenshot/screenshot.dart';
@@ -13,7 +15,6 @@ import '../services/media_service.dart';
 import 'barcode_scanner_screen.dart';
 import 'vehicle_entry_screen.dart';
 import 'vehicle_media_gallery_screen.dart';
-import 'package:flutter/services.dart';
 import 'bulk_scan_screen.dart';
 
 class ConsignmentScreen extends StatefulWidget {
@@ -40,16 +41,12 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
 
   String _boxSearchQuery = '';
   final FocusNode _boxSearchFocusNode = FocusNode();
-
-  // Pro FocusNodes for perfect keyboard navigation
-  final FocusNode _companyFocusNode = FocusNode();
-  final FocusNode _sourceFocusNode = FocusNode();
-  final FocusNode _destFocusNode = FocusNode();
   final FocusNode _expectedFocusNode = FocusNode();
   final FocusNode _receivedFocusNode = FocusNode();
 
   bool _isDamaged = false;
   String _selectedMode = 'Surface';
+  String? _selectedZone; // Naya: Warehouse Zone
   List<String> _damagePhotos = [];
   bool _damageCountError = false;
 
@@ -68,13 +65,12 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     _boxSearchController.dispose();
     _listScrollController.dispose();
     _boxSearchFocusNode.dispose();
-    _companyFocusNode.dispose();
-    _sourceFocusNode.dispose();
-    _destFocusNode.dispose();
     _expectedFocusNode.dispose();
     _receivedFocusNode.dispose();
     _sourceLocationController.dispose();
     _destinationLocationController.dispose();
+    _expectedFocusNode.dispose();
+    _receivedFocusNode.dispose();
     super.dispose();
   }
 
@@ -90,6 +86,13 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     _editingBox!.damageDetails = _isDamaged ? _damageDetailsController.text : '';
     _editingBox!.transportMode = _selectedMode;
     _editingBox!.damagePhotos = List<String>.from(_damagePhotos);
+    // Save to zone_mapping
+    final zoneBox = Hive.box<String>('zone_mapping');
+    if (_selectedZone != null && _editingBox!.consignmentNo.isNotEmpty) {
+      zoneBox.put(_editingBox!.consignmentNo, _selectedZone!); // Yahan ! laga do
+    } else if (_editingBox!.consignmentNo.isNotEmpty) {
+      zoneBox.delete(_editingBox!.consignmentNo);
+    }
     _editingBox!.sourceLocation = _sourceLocationController.text;
     _editingBox!.destinationLocation = _destinationLocationController.text;
     _editingBox!.lastEditedAt = DateTime.now();
@@ -100,9 +103,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
 
     widget.vehicleEntry.lastEditedAt = DateTime.now();
     widget.vehicleEntry.save();
-
-    final box = Hive.box<VehicleEntry>('vehicle_entries');
-    box.flush();
+    Hive.box<VehicleEntry>('vehicle_entries').flush();
   }
 
   void _saveAndClosePopup(BuildContext sheetContext) {
@@ -135,6 +136,17 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     Navigator.pop(sheetContext);
   }
 
+  Future<void> _openBulkScan() async {
+    _boxSearchFocusNode.unfocus();
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BulkScanScreen(vehicleEntry: widget.vehicleEntry),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
   Future<void> _showBoxPopup({BoxItem? boxToEdit, int? index}) async {
     _boxSearchFocusNode.unfocus();
 
@@ -155,6 +167,9 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       _sourceLocationController.text = boxToEdit.sourceLocation;
       _destinationLocationController.text = boxToEdit.destinationLocation;
       _damageCountError = false;
+      // Load existing zone
+      final zoneBox = Hive.box<String>('zone_mapping');
+      _selectedZone = zoneBox.get(boxToEdit.consignmentNo);
     } else {
       _isNewDraft = true;
       _editingBox = BoxItem(
@@ -182,360 +197,546 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
       _selectedMode = 'Surface';
       _damagePhotos = [];
       _damageCountError = false;
+      _selectedZone = null; // Reset zone for new box
     }
 
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: 16,
-                right: 16,
-                top: 16,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _isNewDraft ? 'Add New Box' : 'Edit Box Details',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // 1. Consignment (Next -> Company)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _consignmentController,
-                            textInputAction: TextInputAction.next,
-                            keyboardType: TextInputType.number, // Sirf number keyboard khulega
-                            inputFormatters: [
-                              // Letters block kar do, sirf numbers, hyphen aur space allow karo
-                              FilteringTextInputFormatter.deny(RegExp(r'[a-zA-Z]')),
-                            ],
-                            onSubmitted: (_) => _companyFocusNode.requestFocus(),
-                            decoration: const InputDecoration(
-                              labelText: 'Docket Number (e.g., 100012312 - 1)',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.inventory),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Focus(
-                          canRequestFocus: false,
-                          child: Container(
-                            height: 50,
-                            width: 50,
-                            decoration: BoxDecoration(
-                              color: Colors.blue[800],
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: IconButton(
-                              icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
-                              onPressed: () async {
-                                _boxSearchFocusNode.unfocus();
-                                final scannedCode = await Navigator.push<String>(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const BarcodeScannerScreen(),
-                                  ),
-                                );
-                                if (scannedCode != null && scannedCode.isNotEmpty) {
-                                  setState(() {
-                                    _consignmentController.text = scannedCode;
-                                  });
-                                  _companyFocusNode.requestFocus();
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-
-                    // 2. Company Name (Next -> Source)
-                    Autocomplete<String>(
-                      initialValue: TextEditingValue(text: _companyController.text),
-                      fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                        focusNode = _companyFocusNode;
-                        return TextField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          textInputAction: TextInputAction.next,
-                          onSubmitted: (_) => _sourceFocusNode.requestFocus(),
-                          onChanged: (val) {
-                            _companyController.text = val;
-                          },
-                          decoration: const InputDecoration(
-                            labelText: 'Company Name',
-                            border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.business),
-                          ),
-                        );
-                      },
-                      optionsBuilder: (TextEditingValue textEditingValue) {
-                        if (textEditingValue.text.isEmpty) {
-                          return const Iterable<String>.empty();
-                        }
-                        final companyBox = Hive.box<String>('companies');
-                        return companyBox.values.where((company) =>
-                            company.toLowerCase().contains(textEditingValue.text.toLowerCase()));
-                      },
-                      onSelected: (String selection) {
-                        _companyController.text = selection;
-                        _sourceFocusNode.requestFocus();
-                      },
-                    ),
-                    const SizedBox(height: 10),
-
-                    // 3 & 4. Source & Dest (Next -> Expected)
-                    Row(
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.95),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
+            ),
+            child: StatefulBuilder(
+              builder: (BuildContext context, StateSetter setModalState) {
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).viewInsets.bottom,
+                    left: 16,
+                    right: 16,
+                    top: 0,
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Autocomplete<String>(
-                            initialValue: TextEditingValue(text: _sourceLocationController.text),
-                            fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                              focusNode = _sourceFocusNode;
-                              return TextField(
-                                controller: controller,
-                                focusNode: focusNode,
-                                textInputAction: TextInputAction.next,
-                                onSubmitted: (_) => _destFocusNode.requestFocus(),
-                                textCapitalization: TextCapitalization.words,
-                                onChanged: (val) {
-                                  _sourceLocationController.text = val;
-                                },
-                                decoration: const InputDecoration(
-                                  labelText: 'From (Source)',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.location_on),
-                                ),
-                              );
-                            },
-                            optionsBuilder: (TextEditingValue textEditingValue) {
-                              if (textEditingValue.text.isEmpty) {
-                                return const Iterable<String>.empty();
-                              }
-                              final locBox = Hive.box<String>('locations');
-                              return locBox.values.where((loc) =>
-                                  loc.toLowerCase().contains(textEditingValue.text.toLowerCase()));
-                            },
-                            onSelected: (String selection) {
-                              _sourceLocationController.text = selection;
-                              _destFocusNode.requestFocus();
-                            },
-                          ),
-                        ),
-                        const Padding(
-                          padding: EdgeInsets.only(top: 15.0, left: 5, right: 5),
-                          child: Text('To', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        ),
-                        Expanded(
-                          child: Autocomplete<String>(
-                            initialValue: TextEditingValue(text: _destinationLocationController.text),
-                            fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                              focusNode = _destFocusNode;
-                              return TextField(
-                                controller: controller,
-                                focusNode: focusNode,
-                                textInputAction: TextInputAction.next,
-                                onSubmitted: (_) => _expectedFocusNode.requestFocus(),
-                                textCapitalization: TextCapitalization.words,
-                                onChanged: (val) {
-                                  _destinationLocationController.text = val;
-                                },
-                                decoration: const InputDecoration(
-                                  labelText: 'To (Dest)',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.flag),
-                                ),
-                              );
-                            },
-                            optionsBuilder: (TextEditingValue textEditingValue) {
-                              if (textEditingValue.text.isEmpty) {
-                                return const Iterable<String>.empty();
-                              }
-                              final locBox = Hive.box<String>('locations');
-                              return locBox.values.where((loc) =>
-                                  loc.toLowerCase().contains(textEditingValue.text.toLowerCase()));
-                            },
-                            onSelected: (String selection) {
-                              _destinationLocationController.text = selection;
-                              _expectedFocusNode.requestFocus();
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-
-                    // 5 & 6. Expected & Received (Input Validation Added)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _expectedController,
-                            focusNode: _expectedFocusNode,
-                            keyboardType: TextInputType.number,
-                            textInputAction: TextInputAction.next,
-                            onSubmitted: (_) => _receivedFocusNode.requestFocus(),
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Only Positive Numbers
-                            decoration: const InputDecoration(labelText: 'Expected', border: OutlineInputBorder()),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            controller: _receivedController,
-                            focusNode: _receivedFocusNode,
-                            keyboardType: TextInputType.number,
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => _saveAndClosePopup(sheetContext),
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Only Positive Numbers
-                            decoration: const InputDecoration(labelText: 'Received', border: OutlineInputBorder()),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-
-                    SwitchListTile(
-                      title: const Text('Damaged Box'),
-                      value: _isDamaged,
-                      onChanged: (val) {
-                        setModalState(() => _isDamaged = val);
-                      },
-                      activeColor: Colors.red,
-                    ),
-                    if (_isDamaged) ...[
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _damagedCountController,
-                        keyboardType: TextInputType.number,
-                        textInputAction: TextInputAction.next,
-                        onSubmitted: (_) => FocusScope.of(context).nextFocus(),
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Only Positive Numbers
-                        onChanged: (val) {
-                          setModalState(() {
-                            _damageCountError = val.isEmpty || (int.tryParse(val) ?? 0) <= 0;
-                          });
-                        },
-                        decoration: InputDecoration(
-                          labelText: 'Kitne Box Damage Hue?',
-                          border: OutlineInputBorder(
-                            borderSide: BorderSide(color: _damageCountError ? Colors.red : Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: _damageCountError ? Colors.red : Colors.blue, width: 2),
-                          ),
-                          prefixIcon: Icon(Icons.broken_image, color: _damageCountError ? Colors.red : null),
-                          errorText: _damageCountError ? 'Pehle kitna box damage hai likhein' : null,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Autocomplete<String>(
-                        initialValue: TextEditingValue(text: _damageDetailsController.text),
-                        fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                          return TextField(
-                            controller: controller,
-                            focusNode: focusNode,
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => FocusScope.of(context).unfocus(),
-                            maxLines: 2,
-                            onChanged: (val) {
-                              _damageDetailsController.text = val;
-                            },
-                            decoration: const InputDecoration(
-                                labelText: 'Damage Details',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.description)
+                        Center(
+                          child: Container(
+                            margin: const EdgeInsets.only(top: 12, bottom: 12),
+                            width: 40,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[400],
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                          );
-                        },
-                        optionsBuilder: (TextEditingValue textEditingValue) {
-                          if (textEditingValue.text.isEmpty) {
-                            return const Iterable<String>.empty();
-                          }
-                          final dBox = Hive.box<String>('damage_details');
-                          return dBox.values.where((d) =>
-                              d.toLowerCase().contains(textEditingValue.text.toLowerCase()));
-                        },
-                        onSelected: (String selection) {
-                          _damageDetailsController.text = selection;
-                          FocusScope.of(context).unfocus();
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.camera_alt, color: Colors.white),
-                        label: const Text('Upload Damage Photos', style: TextStyle(color: Colors.white)),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700]),
-                        onPressed: () async {
-                          int damageCount = int.tryParse(_damagedCountController.text) ?? 0;
+                          ),
+                        ),
+                        Text(
+                          _isNewDraft ? 'Add New Box' : 'Edit Box Details',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 16),
 
-                          if (_damagedCountController.text.isEmpty || damageCount <= 0) {
-                            setModalState(() {
-                              _damageCountError = true;
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Pehle kitne box damage hue ye likhein!'),
-                                backgroundColor: Colors.red,
+                        // 1. Consignment (Next -> Company)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _consignmentController,
+                                textInputAction: TextInputAction.next,
+                                onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                                decoration: const InputDecoration(
+                                  labelText: 'Consignment/Product No',
+                                  prefixIcon: Icon(Icons.inventory),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Focus(
+                              canRequestFocus: false,
+                              child: Container(
+                                height: 50,
+                                width: 50,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFD84315),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: IconButton(
+                                  icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
+                                  onPressed: () async {
+                                    _boxSearchFocusNode.unfocus();
+                                    final scannedCode = await Navigator.push<String>(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => const BarcodeScannerScreen(),
+                                      ),
+                                    );
+                                    if (scannedCode != null && scannedCode.isNotEmpty) {
+                                      setState(() {
+                                        _consignmentController.text = scannedCode;
+                                      });
+                                      FocusScope.of(context).nextFocus();
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        // 2. Company Name (Next -> Source)
+                        Autocomplete<String>(
+                          initialValue: TextEditingValue(text: _companyController.text),
+                          fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                            return TextField(
+                              controller: controller,
+                              focusNode: focusNode, // Framework wala use karo
+                              onEditingComplete: onEditingComplete,
+                              textInputAction: TextInputAction.next,
+                              onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                              onChanged: (val) {
+                                _companyController.text = val;
+                              },
+                              decoration: const InputDecoration(
+                                labelText: 'Company Name',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.business),
                               ),
                             );
-                            return;
-                          }
+                          },
+                          optionsBuilder: (TextEditingValue textEditingValue) {
+                            if (textEditingValue.text.isEmpty) {
+                              return const Iterable<String>.empty();
+                            }
+                            final companyBox = Hive.box<String>('companies');
+                            return companyBox.values.where((company) =>
+                                company.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                          },
+                          onSelected: (String selection) {
+                            _companyController.text = selection;
+                            FocusScope.of(context).nextFocus();
+                          },
+                        ),
+                        const SizedBox(height: 10),
 
+                        // 3 & 4. Source & Dest (Next -> Expected)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Autocomplete<String>(
+                                initialValue: TextEditingValue(text: _sourceLocationController.text),
+                                fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                                  return TextField(
+                                    controller: controller,
+                                    focusNode: focusNode,
+                                    onEditingComplete: onEditingComplete,
+                                    textInputAction: TextInputAction.next,
+                                    onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                                    textCapitalization: TextCapitalization.words,
+                                    onChanged: (val) {
+                                      _sourceLocationController.text = val;
+                                    },
+                                    decoration: const InputDecoration(
+                                      labelText: 'From (Source)',
+                                      border: OutlineInputBorder(),
+                                      prefixIcon: Icon(Icons.location_on),
+                                    ),
+                                  );
+                                },
+                                optionsBuilder: (TextEditingValue textEditingValue) {
+                                  if (textEditingValue.text.isEmpty) {
+                                    return const Iterable<String>.empty();
+                                  }
+                                  final locBox = Hive.box<String>('locations');
+                                  return locBox.values.where((loc) =>
+                                      loc.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                                },
+                                onSelected: (String selection) {
+                                  _sourceLocationController.text = selection;
+                                  FocusScope.of(context).nextFocus();
+                                },
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.only(top: 15.0, left: 5, right: 5),
+                              child: Text('To', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            ),
+                            Expanded(
+                              child: Autocomplete<String>(
+                                initialValue: TextEditingValue(text: _destinationLocationController.text),
+                                fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                                  return TextField(
+                                    controller: controller,
+                                    focusNode: focusNode,
+                                    onEditingComplete: onEditingComplete,
+                                    textInputAction: TextInputAction.next,
+                                    onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                                    textCapitalization: TextCapitalization.words,
+                                    onChanged: (val) {
+                                      _destinationLocationController.text = val;
+                                    },
+                                    decoration: const InputDecoration(
+                                      labelText: 'To (Dest)',
+                                      border: OutlineInputBorder(),
+                                      prefixIcon: Icon(Icons.flag),
+                                    ),
+                                  );
+                                },
+                                optionsBuilder: (TextEditingValue textEditingValue) {
+                                  if (textEditingValue.text.isEmpty) {
+                                    return const Iterable<String>.empty();
+                                  }
+                                  final locBox = Hive.box<String>('locations');
+                                  return locBox.values.where((loc) =>
+                                      loc.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                                },
+                                onSelected: (String selection) {
+                                  _destinationLocationController.text = selection;
+                                  FocusScope.of(context).nextFocus();
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        // 5 & 6. Expected & Received (Expected -> Next, Received -> Done/Save)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _expectedController,
+                                focusNode: _expectedFocusNode, // Naya FocusNode
+                                keyboardType: TextInputType.number,
+                                textInputAction: TextInputAction.next,
+                                onSubmitted: (_) => _receivedFocusNode.requestFocus(), // Direct Received pe jayega
+                                onChanged: (val) => _forceSave(),
+                                decoration: const InputDecoration(labelText: 'Expected', border: OutlineInputBorder()),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                controller: _receivedController,
+                                focusNode: _receivedFocusNode, // Naya FocusNode
+                                keyboardType: TextInputType.number,
+                                textInputAction: TextInputAction.done, // Yahan Tick (Done) aayega
+                                onSubmitted: (_) => _saveAndClosePopup(sheetContext), // Enter/Done dabate hi save ho jayega
+                                onChanged: (val) => _forceSave(),
+                                decoration: const InputDecoration(labelText: 'Received', border: OutlineInputBorder()),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        SwitchListTile(
+                          title: const Text('Damaged Box'),
+                          value: _isDamaged,
+                          onChanged: (val) {
+                            setModalState(() => _isDamaged = val);
+                          },
+                          activeColor: const Color(0xFFD84315),
+                        ),
+                        if (_isDamaged) ...[
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _damagedCountController,
+                            keyboardType: TextInputType.number,
+                            textInputAction: TextInputAction.next,
+                            onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            onChanged: (val) {
+                              setModalState(() {
+                                _damageCountError = val.isEmpty || (int.tryParse(val) ?? 0) <= 0;
+                              });
+                            },
+                            decoration: InputDecoration(
+                              labelText: 'Kitne Box Damage Hue?',
+                              border: OutlineInputBorder(
+                                borderSide: BorderSide(color: _damageCountError ? Colors.red : Colors.grey),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: _damageCountError ? Colors.red : const Color(0xFFD84315), width: 2),
+                              ),
+                              prefixIcon: Icon(Icons.broken_image, color: _damageCountError ? Colors.red : null),
+                              errorText: _damageCountError ? 'Pehle kitna box damage hai likhein' : null,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Autocomplete<String>(
+                            initialValue: TextEditingValue(text: _damageDetailsController.text),
+                            fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                              return TextField(
+                                controller: controller,
+                                focusNode: focusNode,
+                                onEditingComplete: onEditingComplete,
+                                textInputAction: TextInputAction.done,
+                                onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                                maxLines: 2,
+                                onChanged: (val) {
+                                  _damageDetailsController.text = val;
+                                },
+                                decoration: const InputDecoration(
+                                    labelText: 'Damage Details',
+                                    prefixIcon: Icon(Icons.description)
+                                ),
+                              );
+                            },
+                            optionsBuilder: (TextEditingValue textEditingValue) {
+                              if (textEditingValue.text.isEmpty) {
+                                return const Iterable<String>.empty();
+                              }
+                              final dBox = Hive.box<String>('damage_details');
+                              return dBox.values.where((d) =>
+                                  d.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                            },
+                            onSelected: (String selection) {
+                              _damageDetailsController.text = selection;
+                              FocusScope.of(context).unfocus();
+                            },
+                          ),
+                          const SizedBox(height: 10),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.camera_alt, color: Colors.white),
+                            label: const Text('Upload Damage Photos', style: TextStyle(color: Colors.white)),
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700]),
+                            onPressed: () async {
+                              int damageCount = int.tryParse(_damagedCountController.text) ?? 0;
+
+                              if (_damagedCountController.text.isEmpty || damageCount <= 0) {
+                                setModalState(() {
+                                  _damageCountError = true;
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Pehle kitne box damage hue ye likhein!'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                                return;
+                              }
+
+                              final ImagePicker picker = ImagePicker();
+                              final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 50);
+                              if (photo != null) {
+                                final permanentPath = await MediaService.saveImagePermanently(photo.path);
+                                setModalState(() {
+                                  final List<String> updatedPhotos = List<String>.from(_damagePhotos);
+                                  updatedPhotos.add(permanentPath);
+                                  _damagePhotos = updatedPhotos;
+                                });
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 10),
+                          if (_damagePhotos.isNotEmpty)
+                            SizedBox(
+                              height: 90,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _damagePhotos.length,
+                                itemBuilder: (context, index) {
+                                  return Stack(
+                                    children: [
+                                      Container(
+                                        margin: const EdgeInsets.only(right: 8),
+                                        child: Image.file(
+                                          File(_damagePhotos[index]),
+                                          width: 80,
+                                          height: 80,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                      Positioned(
+                                        right: 0,
+                                        top: 0,
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            setModalState(() {
+                                              final List<String> updatedPhotos = List<String>.from(_damagePhotos);
+                                              updatedPhotos.removeAt(index);
+                                              _damagePhotos = updatedPhotos;
+                                            });
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.all(2),
+                                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                            child: const Icon(Icons.close, size: 14, color: Colors.white),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                        ],
+                        const SizedBox(height: 15),
+                        // Naya: Select Warehouse Zone Button
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10.0),
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.grid_view, color: Colors.white),
+                            label: Text(_selectedZone == null ? 'Select Warehouse Zone' : 'Zone: $_selectedZone', style: const TextStyle(color: Colors.white)),
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD84315)),
+                            onPressed: () async {
+                              final zone = await Navigator.push<String>(context, MaterialPageRoute(builder: (context) => const ZoneSelectionScreen()));
+                              if (zone != null) {
+                                setModalState(() {
+                                  _selectedZone = zone;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        DropdownButtonFormField<String>(
+                          value: _selectedMode,
+                          decoration: const InputDecoration(
+                            labelText: 'Transport Mode',
+                            prefixIcon: Icon(Icons.local_shipping),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'Surface', child: Text('Surface')),
+                            DropdownMenuItem(value: 'Road', child: Text('Road')),
+                            DropdownMenuItem(value: 'Air', child: Text('Air')),
+                            DropdownMenuItem(value: 'Train', child: Text('Train')),
+                          ],
+                          onChanged: (val) {
+                            setModalState(() {
+                              _selectedMode = val!;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD84315), foregroundColor: Colors.white),
+                            onPressed: () => _saveAndClosePopup(sheetContext),
+                            child: Text(_isNewDraft ? 'Add to Vehicle' : 'Update Box', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    ).whenComplete(() {
+      _boxSearchFocusNode.unfocus();
+
+      if (_isNewDraft && _editingBox != null && _editingBox!.consignmentNo.isEmpty) {
+        widget.vehicleEntry.boxes.remove(_editingBox);
+        widget.vehicleEntry.save();
+        Hive.box<VehicleEntry>('vehicle_entries').flush();
+      }
+      _editingBox = null;
+      _editingIndex = null;
+
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  // Complete Process Popup (Non-Blocking Sync + Blur)
+  Future<void> _showCompleteProcessPopup() async {
+    _boxSearchFocusNode.unfocus();
+    int requiredEndPhotos = widget.vehicleEntry.vehicleStatus == 'Unloading' ? 1 : 2;
+    bool skippedEndPhotos = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.95),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
+            ),
+            child: StatefulBuilder(
+              builder: (context, setModalState) {
+                bool hasPhotos = widget.vehicleEntry.endPhotos.length >= requiredEndPhotos || skippedEndPhotos;
+                bool canComplete = hasPhotos;
+
+                return SingleChildScrollView(
+                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 16, right: 16, top: 0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 12, bottom: 12),
+                          width: 40, height: 5,
+                          decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                      Text('Complete Process', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 10),
+                      Text(
+                        widget.vehicleEntry.vehicleStatus == 'Unloading' ? '1. Empty Vehicle Photo' : '1. Sealed Vehicle Photo\n2. Meter/KM Reading Photo',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                      ),
+                      const SizedBox(height: 15),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.camera_alt, color: Colors.white),
+                        label: Text(widget.vehicleEntry.endPhotos.isEmpty ? 'Take End Photos' : 'Add More Photo', style: const TextStyle(color: Colors.white)),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD84315)),
+                        onPressed: () async {
                           final ImagePicker picker = ImagePicker();
-                          final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 50);
+                          final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
                           if (photo != null) {
                             final permanentPath = await MediaService.saveImagePermanently(photo.path);
                             setModalState(() {
-                              final List<String> updatedPhotos = List<String>.from(_damagePhotos);
+                              final List<String> updatedPhotos = List<String>.from(widget.vehicleEntry.endPhotos);
                               updatedPhotos.add(permanentPath);
-                              _damagePhotos = updatedPhotos;
+                              widget.vehicleEntry.endPhotos = updatedPhotos;
+                              widget.vehicleEntry.save();
                             });
                           }
                         },
                       ),
                       const SizedBox(height: 10),
-                      if (_damagePhotos.isNotEmpty)
+                      if (widget.vehicleEntry.endPhotos.isNotEmpty)
                         SizedBox(
                           height: 90,
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
-                            itemCount: _damagePhotos.length,
+                            itemCount: widget.vehicleEntry.endPhotos.length,
                             itemBuilder: (context, index) {
                               return Stack(
                                 children: [
                                   Container(
                                     margin: const EdgeInsets.only(right: 8),
-                                    child: Image.file(
-                                      File(_damagePhotos[index]),
-                                      width: 80,
-                                      height: 80,
-                                      fit: BoxFit.cover,
-                                    ),
+                                    child: Image.file(File(widget.vehicleEntry.endPhotos[index]), width: 80, height: 80, fit: BoxFit.cover),
                                   ),
                                   Positioned(
-                                    right: 0,
-                                    top: 0,
+                                    right: 0, top: 0,
                                     child: GestureDetector(
                                       onTap: () {
                                         setModalState(() {
-                                          final List<String> updatedPhotos = List<String>.from(_damagePhotos);
+                                          final List<String> updatedPhotos = List<String>.from(widget.vehicleEntry.endPhotos);
                                           updatedPhotos.removeAt(index);
-                                          _damagePhotos = updatedPhotos;
+                                          widget.vehicleEntry.endPhotos = updatedPhotos;
+                                          widget.vehicleEntry.save();
                                         });
                                       },
                                       child: Container(
@@ -550,440 +751,242 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                             },
                           ),
                         ),
+                      const SizedBox(height: 20),
+                      if (!hasPhotos)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () { setModalState(() { skippedEndPhotos = true; }); },
+                            child: const Text('Skip Photos', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      SizedBox(
+                        width: double.infinity, height: 50,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: canComplete ? Colors.green[800] : Colors.grey, foregroundColor: Colors.white),
+                          onPressed: canComplete ? () async {
+                            widget.vehicleEntry.isCompleted = true;
+                            widget.vehicleEntry.save();
+                            Hive.box<VehicleEntry>('vehicle_entries').flush();
+
+                            if (context.mounted) { Navigator.pop(context); Navigator.pop(context); }
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Process Completed! Syncing data in background...'), backgroundColor: Colors.blue),
+                              );
+                            }
+                            bool isSynced = await GoogleSyncService.syncToSheet(widget.vehicleEntry);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(isSynced ? 'Successfully Synced to Google Sheet!' : 'Saved locally. Sync failed (No internet).'),
+                                  backgroundColor: isSynced ? Colors.green : Colors.red,
+                                ),
+                              );
+                            }
+                          } : null,
+                          child: const Text('Submit & Complete', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      if (!canComplete)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0, bottom: 10),
+                          child: Text('Complete button lock hai. Pehle Photos khinchye ya Skip dabayein.', style: TextStyle(fontSize: 12, color: Colors.red[700]), textAlign: TextAlign.center),
+                        ),
                     ],
-                    const SizedBox(height: 15),
-                    DropdownButtonFormField<String>(
-                      value: _selectedMode,
-                      decoration: const InputDecoration(
-                        labelText: 'Transport Mode',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.local_shipping),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'Surface', child: Text('Surface')),
-                        DropdownMenuItem(value: 'Road', child: Text('Road')),
-                        DropdownMenuItem(value: 'Air', child: Text('Air')),
-                        DropdownMenuItem(value: 'Train', child: Text('Train')),
-                      ],
-                      onChanged: (val) {
-                        setModalState(() {
-                          _selectedMode = val!;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], foregroundColor: Colors.white),
-                        onPressed: () => _saveAndClosePopup(sheetContext),
-                        child: Text(_isNewDraft ? 'Add to Vehicle' : 'Update Box', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    ).whenComplete(() {
-      _boxSearchFocusNode.unfocus();
-
-      if (_isNewDraft && _editingBox != null && _editingBox!.consignmentNo.isEmpty) {
-        widget.vehicleEntry.boxes.remove(_editingBox);
-        widget.vehicleEntry.save();
-        final box = Hive.box<VehicleEntry>('vehicle_entries');
-        box.flush();
-      }
-      _editingBox = null;
-      _editingIndex = null;
-
-      if (mounted) {
-        setState(() {});
-      }
-    });
-  }
-
-  // Complete Process Popup (Non-Blocking Sync)
-  Future<void> _showCompleteProcessPopup() async {
-    _boxSearchFocusNode.unfocus();
-
-    int requiredEndPhotos = widget.vehicleEntry.vehicleStatus == 'Unloading' ? 1 : 2;
-    bool skippedEndPhotos = false;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            bool canComplete = widget.vehicleEntry.endPhotos.length >= requiredEndPhotos || skippedEndPhotos;
-
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: 16,
-                right: 16,
-                top: 16,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Complete Process', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-                  Text(
-                    widget.vehicleEntry.vehicleStatus == 'Unloading'
-                        ? '1. Empty Vehicle Photo'
-                        : '1. Sealed Vehicle Photo\n2. Meter/KM Reading Photo',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                   ),
-                  const SizedBox(height: 15),
-
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.camera_alt, color: Colors.white),
-                    label: Text(
-                      widget.vehicleEntry.endPhotos.isEmpty ? 'Take End Photos' : 'Add More Photo',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
-                    onPressed: () async {
-                      final ImagePicker picker = ImagePicker();
-                      final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
-                      if (photo != null) {
-                        final permanentPath = await MediaService.saveImagePermanently(photo.path);
-                        setModalState(() {
-                          final List<String> updatedPhotos = List<String>.from(widget.vehicleEntry.endPhotos);
-                          updatedPhotos.add(permanentPath);
-                          widget.vehicleEntry.endPhotos = updatedPhotos;
-                          widget.vehicleEntry.save();
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 10),
-
-                  if (widget.vehicleEntry.endPhotos.isNotEmpty)
-                    SizedBox(
-                      height: 90,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: widget.vehicleEntry.endPhotos.length,
-                        itemBuilder: (context, index) {
-                          return Stack(
-                            children: [
-                              Container(
-                                margin: const EdgeInsets.only(right: 8),
-                                child: Image.file(
-                                  File(widget.vehicleEntry.endPhotos[index]),
-                                  width: 80,
-                                  height: 80,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              Positioned(
-                                right: 0,
-                                top: 0,
-                                child: GestureDetector(
-                                  onTap: () {
-                                    setModalState(() {
-                                      final List<String> updatedPhotos = List<String>.from(widget.vehicleEntry.endPhotos);
-                                      updatedPhotos.removeAt(index);
-                                      widget.vehicleEntry.endPhotos = updatedPhotos;
-                                      widget.vehicleEntry.save();
-                                    });
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.all(2),
-                                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                                    child: const Icon(Icons.close, size: 14, color: Colors.white),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-
-                  const SizedBox(height: 20),
-                  if (!canComplete)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {
-                          setModalState(() {
-                            skippedEndPhotos = true;
-                          });
-                        },
-                        child: const Text('Skip', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: canComplete ? Colors.green[800] : Colors.grey,
-                        foregroundColor: Colors.white,
-                      ),
-                      // NON-BLOCKING SYNC IMPLEMENTED HERE
-                      onPressed: canComplete ? () async {
-                        // 1. Turant local DB me complete mark kar do
-                        widget.vehicleEntry.isCompleted = true;
-                        widget.vehicleEntry.save();
-                        final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
-                        hiveBox.flush();
-
-                        // 2. Popup aur Screen turant band kar do
-                        if (context.mounted) {
-                          Navigator.pop(context); // Popup band
-                          Navigator.pop(context); // Consignment screen band
-                        }
-
-                        // 3. User ko turant success dikhao
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Process Completed! Syncing data in background...'),
-                              backgroundColor: Colors.blue,
-                            ),
-                          );
-                        }
-
-                        // 4. Background me Sync Start Kar Do (UI freeze nahi hoga)
-                        bool isSynced = await GoogleSyncService.syncToSheet(widget.vehicleEntry);
-
-                        // 5. Sync ka result user ko SnackBar me batao
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(isSynced
-                                  ? 'Successfully Synced to Google Sheet!'
-                                  : 'Saved locally. Sync failed (No internet).'),
-                              backgroundColor: isSynced ? Colors.green : Colors.red,
-                            ),
-                          );
-                        }
-                      } : null,
-                      child: const Text('Submit & Complete', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  if (!canComplete)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0, bottom: 10),
-                      child: Text(
-                        'Complete button lock hai. Pehle End Photos khinchye ya Skip dabayein.',
-                        style: TextStyle(fontSize: 12, color: Colors.red[700]),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
+                );
+              },
+            ),
+          ),
         );
       },
     );
   }
 
-  Future<void> _openBulkScan() async {
-    _boxSearchFocusNode.unfocus();
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => BulkScanScreen(vehicleEntry: widget.vehicleEntry),
-      ),
-    );
-    if (mounted) setState(() {});
-  }
-
+  // Trash Popup (Blur + Drag Handle)
   void _showTrashForThisVehicle() {
     _boxSearchFocusNode.unfocus();
-
     showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final deletedBoxes = widget.vehicleEntry.boxes.where((b) => b.isDeleted).toList();
-
-            return Container(
-              padding: const EdgeInsets.all(16),
-              height: MediaQuery.of(context).size.height * 0.6,
-              child: Column(
-                children: [
-                  const Text('Trash (Deleted Boxes)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const Divider(),
-                  if (deletedBoxes.isEmpty)
-                    const Expanded(
-                      child: Center(
-                        child: Text('Trash khaali hai.\nKoi box delete nahi hua.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.95),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
+            ),
+            child: StatefulBuilder(
+              builder: (context, setModalState) {
+                final deletedBoxes = widget.vehicleEntry.boxes.where((b) => b.isDeleted).toList();
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  height: MediaQuery.of(context).size.height * 0.6,
+                  child: Column(
+                    children: [
+                      Center(
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 4, bottom: 12),
+                          width: 40, height: 5,
+                          decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(10)),
+                        ),
                       ),
-                    )
-                  else
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: deletedBoxes.length,
-                        itemBuilder: (context, index) {
-                          final box = deletedBoxes[index];
-                          return ListTile(
-                            title: Text(box.consignmentNo, style: const TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey)),
-                            subtitle: Text(box.companyName),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.restore, color: Colors.green),
-                                  tooltip: 'Restore',
-                                  onPressed: () {
-                                    setModalState(() {
-                                      box.isDeleted = false;
-                                      final idx = widget.vehicleEntry.boxes.indexOf(box);
-                                      if (idx != -1) {
-                                        widget.vehicleEntry.boxes[idx] = box;
-                                      }
-                                      widget.vehicleEntry.lastEditedAt = DateTime.now();
-                                      widget.vehicleEntry.save();
-                                      final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
-                                      hiveBox.flush();
-                                      deletedBoxes.removeAt(index);
-                                    });
-                                    setState(() {});
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('${box.consignmentNo} successfully restored!')),
-                                    );
-                                  },
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_forever, color: Colors.red),
-                                  tooltip: 'Delete Permanently',
-                                  onPressed: () {
-                                    showDialog(
-                                      context: context,
-                                      builder: (dialogContext) => AlertDialog(
-                                        title: const Text('Delete Permanently?'),
-                                        content: Text('Are you sure? ${box.consignmentNo} permanently delete ho jayega.'),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(dialogContext),
-                                            child: const Text('Cancel'),
+                      const Text('Trash (Deleted Boxes)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Divider(),
+                      if (deletedBoxes.isEmpty)
+                        const Expanded(child: Center(child: Text('Trash khaali hai.\nKoi box delete nahi hua.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey))))
+                      else
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: deletedBoxes.length,
+                            itemBuilder: (context, index) {
+                              final box = deletedBoxes[index];
+                              return ListTile(
+                                title: Text(box.consignmentNo, style: const TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey)),
+                                subtitle: Text(box.companyName),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.restore, color: Colors.green),
+                                      onPressed: () {
+                                        setModalState(() {
+                                          box.isDeleted = false;
+                                          final idx = widget.vehicleEntry.boxes.indexOf(box);
+                                          if (idx != -1) { widget.vehicleEntry.boxes[idx] = box; }
+                                          widget.vehicleEntry.lastEditedAt = DateTime.now();
+                                          widget.vehicleEntry.save();
+                                          Hive.box<VehicleEntry>('vehicle_entries').flush();
+                                          deletedBoxes.removeAt(index);
+                                        });
+                                        setState(() {});
+                                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${box.consignmentNo} restored!')));
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_forever, color: Colors.red),
+                                      onPressed: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (dialogContext) => AlertDialog(
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                            title: const Text('Delete Permanently?'),
+                                            content: Text('Are you sure? ${box.consignmentNo} permanently delete ho jayega.'),
+                                            actions: [
+                                              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                                onPressed: () {
+                                                  setModalState(() {
+                                                    widget.vehicleEntry.boxes.remove(box);
+                                                    widget.vehicleEntry.save();
+                                                    Hive.box<VehicleEntry>('vehicle_entries').flush();
+                                                    deletedBoxes.removeAt(index);
+                                                  });
+                                                  setState(() {});
+                                                  Navigator.pop(dialogContext);
+                                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${box.consignmentNo} deleted!')));
+                                                },
+                                                child: const Text('Delete'),
+                                              ),
+                                            ],
                                           ),
-                                          ElevatedButton(
-                                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                                            onPressed: () {
-                                              setModalState(() {
-                                                widget.vehicleEntry.boxes.remove(box);
-                                                widget.vehicleEntry.save();
-                                                final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
-                                                hiveBox.flush();
-                                                deletedBoxes.removeAt(index);
-                                              });
-                                              setState(() {});
-                                              Navigator.pop(dialogContext);
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(content: Text('${box.consignmentNo} permanently deleted!')),
-                                              );
-                                            },
-                                            child: const Text('Delete'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
+                                        );
+                                      },
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
+                              );
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
         );
       },
     );
   }
 
+  // Export Menu Popup (Blur + Drag Handle)
   void _showExportMenu() {
     _boxSearchFocusNode.unfocus();
-
     final entry = widget.vehicleEntry;
     final activeBoxes = entry.boxes.where((b) => !b.isDeleted && b.consignmentNo.isNotEmpty).toList();
-
     final parentContext = context;
     final messenger = ScaffoldMessenger.of(parentContext);
 
     showModalBottomSheet(
       context: parentContext,
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Export & Share', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              ListTile(
-                  leading: const Icon(Icons.chat, color: Colors.green),
-                  title: const Text('Export to WhatsApp'),
-                  onTap: () async {
-                    Navigator.pop(sheetContext);
-                    await ExportService.exportToWhatsApp(entry);
-                  }
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.95),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 4, bottom: 16),
+                      width: 40, height: 5,
+                      decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const Text('Export & Share', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  ListTile(
+                      leading: const Icon(Icons.chat, color: Colors.green),
+                      title: const Text('Export to WhatsApp'),
+                      onTap: () async { Navigator.pop(sheetContext); await ExportService.exportToWhatsApp(entry); }
+                  ),
+                  ListTile(
+                      leading: const Icon(Icons.photo, color: Colors.blue),
+                      title: const Text('Export as Image (PNG)'),
+                      onTap: () async {
+                        Navigator.pop(sheetContext);
+                        try {
+                          final slipWidget = _buildDigitalSlip(entry, activeBoxes);
+                          final imageBytes = await _screenshotController.captureFromWidget(slipWidget, pixelRatio: 2.0, context: parentContext);
+                          final directory = await getApplicationDocumentsDirectory();
+                          final file = await File('${directory.path}/LT_Operations_Slip.png').writeAsBytes(imageBytes);
+                          await ExportService.shareImage(file, entry.vehicleNumber);
+                        } catch (e) {
+                          messenger.showSnackBar(SnackBar(content: Text('Image export failed: $e')));
+                        }
+                      }
+                  ),
+                  ListTile(
+                      leading: const Icon(Icons.table_view, color: Colors.orange),
+                      title: const Text('Export to Excel'),
+                      onTap: () async { Navigator.pop(sheetContext); await ExportService.exportToExcel(entry); }
+                  ),
+                  ListTile(
+                      leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
+                      title: const Text('Export to PDF (High Quality)'),
+                      onTap: () async {
+                        Navigator.pop(sheetContext);
+                        try { await ExportService.exportToPdf(entry); }
+                        catch (e) { messenger.showSnackBar(SnackBar(content: Text('PDF export failed: $e'))); }
+                      }
+                  ),
+                  const SizedBox(height: 10),
+                ],
               ),
-              ListTile(
-                  leading: const Icon(Icons.photo, color: Colors.blue),
-                  title: const Text('Export as Image (PNG)'),
-                  onTap: () async {
-                    Navigator.pop(sheetContext);
-                    try {
-                      final slipWidget = _buildDigitalSlip(entry, activeBoxes);
-                      final imageBytes = await _screenshotController.captureFromWidget(
-                        slipWidget,
-                        pixelRatio: 2.0,
-                        context: parentContext,
-                      );
-
-                      final directory = await getApplicationDocumentsDirectory();
-                      final file = await File('${directory.path}/LT_Operations_Slip.png').writeAsBytes(imageBytes);
-                      await ExportService.shareImage(file, entry.vehicleNumber);
-                    } catch (e) {
-                      messenger.showSnackBar(
-                        SnackBar(content: Text('Image export failed: $e')),
-                      );
-                    }
-                  }
-              ),
-              ListTile(
-                  leading: const Icon(Icons.table_view, color: Colors.orange),
-                  title: const Text('Export to Excel'),
-                  onTap: () async {
-                    Navigator.pop(sheetContext);
-                    await ExportService.exportToExcel(entry);
-                  }
-              ),
-              ListTile(
-                  leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
-                  title: const Text('Export to PDF (High Quality)'),
-                  onTap: () async {
-                    Navigator.pop(sheetContext);
-                    try {
-                      await ExportService.exportToPdf(entry);
-                    } catch (e) {
-                      messenger.showSnackBar(
-                        SnackBar(content: Text('PDF export failed: $e')),
-                      );
-                    }
-                  }
-              ),
-            ],
+            ),
           ),
         );
       },
@@ -1004,7 +1007,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
           children: [
             Container(
               width: double.infinity,
-              color: Colors.blue[800],
+              color: const Color(0xFFD84315),
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1058,7 +1061,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                                 '${entry.vehicleStatus} | ${entry.gateNumber}',
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: entry.vehicleStatus == 'Loading' ? Colors.blue[800] : Colors.orange[800]
+                                    color: entry.vehicleStatus == 'Loading' ? const Color(0xFFD84315) : const Color(0xFFFFA000)
                                 ),
                               ),
                             ),
@@ -1225,10 +1228,9 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Box Counting', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.blue[800],
+        backgroundColor: const Color(0xFFD84315), // Corporate Orange
         foregroundColor: Colors.white,
         actions: [
-          // Naya: Bulk Scan Button
           IconButton(
             icon: const Icon(Icons.document_scanner, color: Colors.white),
             tooltip: 'Bulk Scan Boxes',
@@ -1279,7 +1281,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                 child: ListTile(
                   leading: Icon(
                       Icons.check_circle,
-                      color: entry.isCompleted ? Colors.green : Colors.blue[800]
+                      color: entry.isCompleted ? Colors.green : const Color(0xFFD84315)
                   ),
                   title: Text(
                     entry.isCompleted ? 'Process Completed' : 'Complete Process',
@@ -1388,7 +1390,6 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                 },
                 decoration: InputDecoration(
                   labelText: 'Search Consignment, Company, Mode, Location...',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _boxSearchQuery.isNotEmpty
                       ? IconButton(
@@ -1537,16 +1538,14 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                                     final hiveBox = Hive.box<VehicleEntry>('vehicle_entries');
                                     hiveBox.flush();
                                   });
-                                  // UNDO FEATURE ADDED HERE
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text('${box.consignmentNo} Trash me bhej diya gaya!'),
-                                      duration: const Duration(seconds: 4), // 4 seconds tak rahega
+                                      duration: const Duration(seconds: 4),
                                       action: SnackBarAction(
                                         label: 'UNDO',
                                         textColor: Colors.yellow,
                                         onPressed: () {
-                                          // Wapas active kar do
                                           setState(() {
                                             box.isDeleted = false;
                                             final idx = widget.vehicleEntry.boxes.indexOf(box);
@@ -1584,7 +1583,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
           _boxSearchFocusNode.unfocus();
           _showBoxPopup();
         },
-        backgroundColor: Colors.blue[800],
+        backgroundColor: const Color(0xFFD84315),
         icon: const Icon(Icons.add, color: Colors.white, size: 32),
         label: const Text(
             'Add Box',
