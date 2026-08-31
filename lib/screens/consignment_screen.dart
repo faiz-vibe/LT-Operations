@@ -7,7 +7,6 @@ import 'dart:io';
 import 'package:screenshot/screenshot.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
-import '../services/google_sync_service.dart';
 import '../models/vehicle_entry.dart';
 import '../models/box_item.dart';
 import '../services/export_service.dart';
@@ -772,16 +771,7 @@ class _ConsignmentScreenState extends State<ConsignmentScreen> {
                             if (context.mounted) { Navigator.pop(context); Navigator.pop(context); }
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Process Completed! Syncing data in background...'), backgroundColor: Colors.blue),
-                              );
-                            }
-                            bool isSynced = await GoogleSyncService.syncToSheet(widget.vehicleEntry);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(isSynced ? 'Successfully Synced to Google Sheet!' : 'Saved locally. Sync failed (No internet).'),
-                                  backgroundColor: isSynced ? Colors.green : Colors.red,
-                                ),
+                                const SnackBar(content: Text('Process Completed & Saved!'), backgroundColor: Colors.green),
                               );
                             }
                           } : null,

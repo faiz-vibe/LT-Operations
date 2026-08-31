@@ -1,3 +1,4 @@
+import 'preferences_screen.dart';
 import 'location_audit_screen.dart';
 import 'dart:async';
 import 'dart:ui';
@@ -216,6 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildDrawerItem(Icons.delete_outline, 'Trash', 'Deleted items', Colors.red, () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const TrashScreen())); }, trailing: trashCount > 0 ? Container(padding: const EdgeInsets.all(6), decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle), child: Text(trashCount.toString(), style: const TextStyle(color: Colors.white, fontSize: 12))) : null),
                     const Divider(indent: 20, endIndent: 20),
                     _buildDrawerItem(Icons.qr_code_2, 'Generate Stickers', 'Print barcode stickers', Colors.teal, () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const StickerGeneratorScreen())); }),
+                    _buildDrawerItem(Icons.settings_outlined, 'Preferences', 'Theme, size & layout', Colors.teal, () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const PreferencesScreen())); }),
                     _buildDrawerItem(Icons.menu_book, 'Manage Dictionary', 'Auto-complete words', Colors.purple, () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const ManageSuggestionsScreen())); }),
                     _buildDrawerItem(Icons.bar_chart, 'Reports & Analytics', 'Aaj ka stats dekhein', Colors.green, () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportsScreen())); }),
                   ],
